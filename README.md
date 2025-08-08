@@ -9,12 +9,7 @@ Example usecases include:
 - A URL-based context editor that allows any URL, but if URL hosts allow for login, instruct user to login
 - Any other client where you want to support thousands of integrations without any maintenance.
 
-# Implementations
-
-- [html client](index.html)
-- [cloudflare worker client with DO storage](#) coming soon - If you pass any URL, we need to use the MCP-standardized way of discovering oauth. If possible, direct user to signup/login with client. Credentials should be stored in central store. This in itself is super valuable and should be plugable into any website.
-
-# 1. Required Context
+# Required Context
 
 Any implementation should leverage rfc8414 and rfc7591 to
 
@@ -35,6 +30,11 @@ Prompts:
 
 - HTML Client implementation: https://letmeprompt.com/rules-httpsuithu-6btu890
 - Cloudflare Worker implementation: https://letmeprompt.com/rules-httpsuithu-xtjor90
+
+# Implementations
+
+- [html client](index.html)
+- [cloudflare worker client with DO storage](worker.ts) coming soon - If you pass any URL, we need to use the MCP-standardized way of discovering oauth. If possible, direct user to signup/login with client. Credentials should be stored in central store. This in itself is super valuable and should be plugable into any website.
 
 # Related work
 

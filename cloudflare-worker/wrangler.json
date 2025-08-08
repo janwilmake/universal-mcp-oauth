@@ -1,0 +1,17 @@
+{
+  "$schema": "https://unpkg.com/wrangler@latest/config-schema.json",
+  "name": "universal-mcp-oauth",
+  "main": "worker.ts",
+  "compatibility_date": "2025-08-08",
+  "assets": { "directory": "./" },
+  "observability": { "logs": { "enabled": true } },
+  "durable_objects": {
+    "bindings": [
+      { "name": "AuthProvider", "class_name": "AuthProvider" },
+      { "name": "MCPProviders", "class_name": "MCPProviders" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["AuthProvider", "MCPProviders"] }
+  ]
+}

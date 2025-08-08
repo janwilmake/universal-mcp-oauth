@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal MCP OAuth</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        .form-group {
+            margin: 15px 0;
+        }
+
+        input,
+        button {
+            width: 100%;
+            padding: 12px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        button {
+            background: #007cba;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        button:hover {
+            background: #005a87;
+        }
+
+        .provider {
+            border: 1px solid #e1e5e9;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 6px;
+            background: #f8f9fa;
+        }
+
+        .provider h4 {
+            margin: 0 0 8px 0;
+            color: #1f2328;
+        }
+
+        .provider p {
+            margin: 4px 0;
+            color: #656d76;
+            font-size: 14px;
+        }
+
+        .curl-example {
+            background: #f6f8fa;
+            border: 1px solid #d1d9e0;
+            border-radius: 6px;
+            padding: 16px;
+            margin: 20px 0;
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            white-space: pre;
+        }
+
+        .success {
+            color: #1a7f37;
+            background: #dafbe1;
+            border: 1px solid #1a7f37;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 15px 0;
+        }
+
+        .login-prompt {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .login-prompt a {
+            color: #007cba;
+            text-decoration: none;
+            font-weight: 500;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Universal MCP OAuth</h1>
+
+    <div id="content">
+        <div class="login-prompt">
+            <p>Please <a
+                    href="/authorize?response_type=code&client_id=localhost&redirect_uri=http://localhost:3000/callback&scope=users.read&state=demo">login
+                    with X (Twitter)</a> first to manage your MCP server connections.</p>
+        </div>
+    </div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const success = urlParams.get('success');
+
+        if (window.userData) {
+            renderUserContent();
+            if (success) {
+                showSuccess('Successfully connected to MCP server!');
+            }
+        }
+
+        function renderUserContent() {
+            const { user, providers, curlExample } = window.userData;
+
+            document.getElementById('content').innerHTML = `
+                <div>
+                    <p>Welcome, <strong>${user.name}</strong>! (@${user.username})</p>
+                    
+                    <h2>Add New MCP Server</h2>
+                    <div class="form-group">
+                        <input 
+                            type="url" 
+                            id="mcpUrl" 
+                            placeholder="https://your-mcp-server.com" 
+                            value=""
+                        >
+                        <button onclick="addMCPServer()">Connect MCP Server</button>
+                    </div>
+                    
+                    <h2>Connected MCP Servers (${providers.length})</h2>
+                    <div id="providers">
+                        ${providers.length === 0 ?
+                    '<p>No MCP servers connected yet. Add one above!</p>' :
+                    providers.map(provider => `
+                                <div class="provider">
+                                    <h4>${provider.hostname}</h4>
+                                    <p><strong>URL:</strong> ${provider.mcp_url}</p>
+                                    <p><strong>Connected:</strong> ${new Date(provider.created_at).toLocaleString()}</p>
+                                    ${provider.expires_at ? `<p><strong>Expires:</strong> ${new Date(provider.expires_at).toLocaleString()}</p>` : ''}
+                                    <button onclick="removeMCPServer('${provider.hostname}')" style="background: #da3633; width: auto; padding: 6px 12px;">Remove</button>
+                                </div>
+                            `).join('')
+                }
+                    </div>
+                    
+                    ${providers.length > 0 ? `
+                        <h2>Parallel AI Integration</h2>
+                        <p>Use this curl command to run tasks with your connected MCP servers:</p>
+                        <div class="curl-example">${curlExample}</div>
+                        <p><small>Don't forget to replace <code>YOUR_API_KEY</code> with your actual Parallel AI API key.</small></p>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        function addMCPServer() {
+            const url = document.getElementById('mcpUrl').value.trim();
+            if (!url) {
+                alert('Please enter a valid MCP server URL');
+                return;
+            }
+
+            try {
+                new URL(url); // Validate URL
+                window.location.href = `/login?url=${encodeURIComponent(url)}`;
+            } catch (e) {
+                alert('Please enter a valid URL');
+            }
+        }
+
+        function removeMCPServer(hostname) {
+            if (confirm(`Remove MCP server "${hostname}"?`)) {
+                // This would need to be implemented as an endpoint
+                fetch(`/remove?hostname=${encodeURIComponent(hostname)}`, {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + getAccessToken() }
+                })
+                    .then(() => window.location.reload())
+                    .catch(err => alert('Failed to remove server: ' + err.message));
+            }
+        }
+
+        function getAccessToken() {
+            // This would need to be extracted from session/cookies
+            // For now, this is a placeholder
+            return '';
+        }
+
+        function showSuccess(message) {
+            const successDiv = document.createElement('div');
+            successDiv.className = 'success';
+            successDiv.textContent = message;
+            document.body.insertBefore(successDiv, document.body.firstChild);
+
+            setTimeout(() => {
+                successDiv.remove();
+                // Clean URL
+                window.history.replaceState({}, '', window.location.pathname);
+            }, 3000);
+        }
+    </script>
+</body>
+
+</html>
