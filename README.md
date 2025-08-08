@@ -20,6 +20,11 @@ Domain-based OAuth -> Will allow using different MCPs with easy sign-in, but als
 
 If you pass any URL, we need to use the MCP-standardized way of discovering oauth. If possible, direct user to signup/login with client. Credentials should be stored in central store. This in itself is super valuable and should be plugable into any website.
 
+# Useful Context
+
+- https://www.rfc-editor.org/rfc/rfc8414.txt
+- https://www.rfc-editor.org/rfc/rfc9728.txt
+
 # Related work
 
 - https://github.com/janwilmake/xmoney-provider
