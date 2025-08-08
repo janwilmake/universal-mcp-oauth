@@ -8,44 +8,29 @@
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 800px;
+            max-width: 600px;
             margin: 0 auto;
             padding: 20px;
         }
 
-        .form-group {
-            margin: 10px 0;
-        }
-
-        label {
-            display: block;
-            margin-bottom: 5px;
-        }
-
         input,
-        select {
+        button {
             width: 100%;
             padding: 8px;
-            margin-bottom: 10px;
+            margin: 5px 0;
         }
 
         button {
-            padding: 10px 20px;
             background: #007cba;
             color: white;
             border: none;
             cursor: pointer;
         }
 
-        button:hover {
-            background: #005a87;
-        }
-
         .connection {
             border: 1px solid #ddd;
-            padding: 15px;
+            padding: 10px;
             margin: 10px 0;
-            border-radius: 5px;
         }
 
         .error {
@@ -55,320 +40,113 @@
         .success {
             color: green;
         }
-
-        #scopeSelection {
-            margin: 10px 0;
-        }
-
-        .scope-item {
-            margin: 5px 0;
-        }
     </style>
 </head>
 
 <body>
     <h1>Simple OAuth Connector</h1>
-
-    <div class="form-group">
-        <label for="hostname">OAuth Server Hostname:</label>
-        <input type="text" id="hostname" placeholder="auth.example.com" />
-        <button onclick="discoverServer()">Discover Server</button>
-    </div>
-
-    <div id="discovery-result"></div>
-    <div id="scopeSelection" style="display: none;">
-        <h3>Select Scopes:</h3>
-        <div id="scopes"></div>
-        <button onclick="registerAndLogin()">Register & Login</button>
-    </div>
-
+    <input id="hostname" placeholder="OAuth Server Hostname (auth.example.com)">
+    <button onclick="connect()">Connect</button>
     <div id="status"></div>
-
-    <h2>Active Connections</h2>
     <div id="connections"></div>
 
     <script>
-        const REDIRECT_URI = 'https://connect.simplerauth.com';
-        let currentMetadata = null;
-        let selectedScopes = [];
+        const REDIRECT = 'https://connect.simplerauth.com';
 
-        // Check for OAuth callback on page load
-        window.addEventListener('load', () => {
-            handleCallback();
-            renderConnections();
-        });
+        window.onload = () => { handleCallback(); renderConnections(); };
 
-        async function discoverServer() {
-            const hostname = document.getElementById('hostname').value.trim();
-            if (!hostname) {
-                showStatus('Please enter a hostname', 'error');
-                return;
-            }
+        async function connect() {
+            const host = document.getElementById('hostname').value.trim();
+            if (!host) return showStatus('Enter hostname', 'error');
 
             try {
-                showStatus('Discovering OAuth server...', 'info');
+                showStatus('Connecting...', '');
 
-                const metadataUrl = `https://${hostname}/.well-known/oauth-authorization-server`;
-                const response = await fetch(metadataUrl);
-
-                if (!response.ok) {
-                    throw new Error(`Failed to fetch metadata: ${response.status}`);
-                }
-
-                currentMetadata = await response.json();
-
-                // Validate required fields
-                if (!currentMetadata.issuer || !currentMetadata.authorization_endpoint ||
-                    !currentMetadata.token_endpoint || !currentMetadata.registration_endpoint) {
-                    throw new Error('Missing required OAuth endpoints in metadata');
-                }
-
-                showStatus(`Server discovered: ${currentMetadata.issuer}`, 'success');
-                displayDiscoveryResult();
-
-            } catch (error) {
-                showStatus(`Discovery failed: ${error.message}`, 'error');
-                document.getElementById('discovery-result').innerHTML = '';
-                document.getElementById('scopeSelection').style.display = 'none';
-            }
-        }
-
-        function displayDiscoveryResult() {
-            const result = document.getElementById('discovery-result');
-            result.innerHTML = `
-                <h3>Server Metadata</h3>
-                <p><strong>Issuer:</strong> ${currentMetadata.issuer}</p>
-                <p><strong>Authorization Endpoint:</strong> ${currentMetadata.authorization_endpoint}</p>
-                <p><strong>Token Endpoint:</strong> ${currentMetadata.token_endpoint}</p>
-                <p><strong>Registration Endpoint:</strong> ${currentMetadata.registration_endpoint}</p>
-            `;
-
-            displayScopeSelection();
-        }
-
-        function displayScopeSelection() {
-            const scopesDiv = document.getElementById('scopes');
-            const scopeSelection = document.getElementById('scopeSelection');
-
-            if (currentMetadata.scopes_supported && currentMetadata.scopes_supported.length > 0) {
-                scopesDiv.innerHTML = currentMetadata.scopes_supported.map(scope =>
-                    `<div class="scope-item">
-                        <input type="checkbox" id="scope-${scope}" value="${scope}" onchange="updateSelectedScopes()">
-                        <label for="scope-${scope}">${scope}</label>
-                    </div>`
-                ).join('');
-                scopeSelection.style.display = 'block';
-            } else {
-                scopesDiv.innerHTML = '<p>No scopes available or not specified by server</p>';
-                scopeSelection.style.display = 'block';
-            }
-        }
-
-        function updateSelectedScopes() {
-            selectedScopes = Array.from(document.querySelectorAll('#scopes input[type="checkbox"]:checked'))
-                .map(cb => cb.value);
-        }
-
-        async function registerAndLogin() {
-            try {
-                showStatus('Registering client...', 'info');
-
-                // Dynamic client registration
-                const registrationData = {
-                    redirect_uris: [REDIRECT_URI],
-                    client_name: 'Simple OAuth Connector',
-                    grant_types: ['authorization_code'],
-                    response_types: ['code']
-                };
-
-                const regResponse = await fetch(currentMetadata.registration_endpoint, {
+                // Discover & register
+                const meta = await fetch(`https://${host}/.well-known/oauth-authorization-server`).then(r => r.json());
+                const client = await fetch(meta.registration_endpoint, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(registrationData)
-                });
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        redirect_uris: [REDIRECT],
+                        client_name: 'OAuth Connector',
+                        grant_types: ['authorization_code'],
+                        response_types: ['code']
+                    })
+                }).then(r => r.json());
 
-                if (!regResponse.ok) {
-                    throw new Error(`Client registration failed: ${regResponse.status}`);
-                }
+                // Store & redirect
+                const state = Math.random().toString(36).substr(2);
+                sessionStorage.setItem('oauth_data', JSON.stringify({ client, meta, state }));
 
-                const clientInfo = await regResponse.json();
+                location.href = `${meta.authorization_endpoint}?${new URLSearchParams({
+                    response_type: 'code', client_id: client.client_id,
+                    redirect_uri: REDIRECT, state, scope: 'openid profile'
+                })}`;
 
-                if (!clientInfo.client_id) {
-                    throw new Error('No client_id received from registration');
-                }
-
-                showStatus('Client registered successfully, redirecting to authorization...', 'success');
-
-                // Store registration info for token exchange
-                sessionStorage.setItem('oauth_client_info', JSON.stringify({
-                    client_id: clientInfo.client_id,
-                    client_secret: clientInfo.client_secret,
-                    metadata: currentMetadata,
-                    scopes: selectedScopes
-                }));
-
-                // Redirect to authorization endpoint
-                const authParams = new URLSearchParams({
-                    response_type: 'code',
-                    client_id: clientInfo.client_id,
-                    redirect_uri: REDIRECT_URI,
-                    scope: selectedScopes.join(' '),
-                    state: generateState()
-                });
-
-                sessionStorage.setItem('oauth_state', authParams.get('state'));
-
-                window.location.href = `${currentMetadata.authorization_endpoint}?${authParams.toString()}`;
-
-            } catch (error) {
-                showStatus(`Registration/Login failed: ${error.message}`, 'error');
-            }
-        }
-
-        function generateState() {
-            return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+            } catch (e) { showStatus(`Failed: ${e.message}`, 'error'); }
         }
 
         async function handleCallback() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const code = urlParams.get('code');
-            const state = urlParams.get('state');
-            const error = urlParams.get('error');
+            const params = new URLSearchParams(location.search);
+            const code = params.get('code'), state = params.get('state');
+            if (!code) return;
 
-            if (error) {
-                showStatus(`Authorization error: ${error}`, 'error');
-                return;
-            }
-
-            if (!code || !state) {
-                return; // Not a callback
-            }
-
-            const storedState = sessionStorage.getItem('oauth_state');
-            if (state !== storedState) {
-                showStatus('Invalid state parameter', 'error');
-                return;
-            }
-
-            const clientInfoStr = sessionStorage.getItem('oauth_client_info');
-            if (!clientInfoStr) {
-                showStatus('Missing client information', 'error');
-                return;
-            }
+            const data = JSON.parse(sessionStorage.getItem('oauth_data') || '{}');
+            if (state !== data.state) return showStatus('Invalid state', 'error');
 
             try {
-                const clientInfo = JSON.parse(clientInfoStr);
-                await exchangeCodeForToken(code, clientInfo);
+                const token = await fetch(data.meta.token_endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({
+                        grant_type: 'authorization_code', code,
+                        redirect_uri: REDIRECT, client_id: data.client.client_id
+                    })
+                }).then(r => r.json());
 
-                // Clean up
-                sessionStorage.removeItem('oauth_state');
-                sessionStorage.removeItem('oauth_client_info');
+                // Store connection
+                const connections = JSON.parse(localStorage.getItem('oauth_connections') || '{}');
+                const hostname = new URL(data.meta.issuer).hostname;
+                connections[hostname] = {
+                    access_token: token.access_token,
+                    issuer: data.meta.issuer,
+                    expires: token.expires_in ? Date.now() + token.expires_in * 1000 : null
+                };
+                localStorage.setItem('oauth_connections', JSON.stringify(connections));
 
-                // Clear URL parameters
-                window.history.replaceState({}, document.title, window.location.pathname);
+                sessionStorage.removeItem('oauth_data');
+                history.replaceState({}, '', location.pathname);
+                showStatus(`Connected to ${hostname}`, 'success');
+                renderConnections();
 
-            } catch (error) {
-                showStatus(`Token exchange failed: ${error.message}`, 'error');
-            }
-        }
-
-        async function exchangeCodeForToken(code, clientInfo) {
-            showStatus('Exchanging code for token...', 'info');
-
-            const tokenParams = new URLSearchParams({
-                grant_type: 'authorization_code',
-                code: code,
-                redirect_uri: REDIRECT_URI,
-                client_id: clientInfo.client_id
-            });
-
-            const headers = {
-                'Content-Type': 'application/x-www-form-urlencoded'
-            };
-
-            // Add client authentication
-            if (clientInfo.client_secret) {
-                headers['Authorization'] = `Basic ${btoa(`${clientInfo.client_id}:${clientInfo.client_secret}`)}`;
-            }
-
-            const tokenResponse = await fetch(clientInfo.metadata.token_endpoint, {
-                method: 'POST',
-                headers: headers,
-                body: tokenParams.toString()
-            });
-
-            if (!tokenResponse.ok) {
-                throw new Error(`Token exchange failed: ${tokenResponse.status}`);
-            }
-
-            const tokenData = await tokenResponse.json();
-
-            if (!tokenData.access_token) {
-                throw new Error('No access token received');
-            }
-
-            // Store connection info
-            const hostname = new URL(clientInfo.metadata.issuer).hostname;
-            const connections = getStoredConnections();
-            connections[hostname] = {
-                access_token: tokenData.access_token,
-                refresh_token: tokenData.refresh_token,
-                scopes: clientInfo.scopes,
-                issuer: clientInfo.metadata.issuer,
-                expires_at: tokenData.expires_in ? Date.now() + (tokenData.expires_in * 1000) : null
-            };
-
-            localStorage.setItem('oauth_connections', JSON.stringify(connections));
-
-            showStatus(`Successfully connected to ${hostname}`, 'success');
-            renderConnections();
-        }
-
-        function getStoredConnections() {
-            const stored = localStorage.getItem('oauth_connections');
-            return stored ? JSON.parse(stored) : {};
+            } catch (e) { showStatus(`Token failed: ${e.message}`, 'error'); }
         }
 
         function renderConnections() {
-            const connections = getStoredConnections();
-            const container = document.getElementById('connections');
-
-            if (Object.keys(connections).length === 0) {
-                container.innerHTML = '<p>No active connections</p>';
-                return;
-            }
-
-            container.innerHTML = Object.entries(connections).map(([hostname, info]) => `
-                <div class="connection">
-                    <h4>${hostname}</h4>
-                    <p><strong>Issuer:</strong> ${info.issuer}</p>
-                    <p><strong>Scopes:</strong> ${info.scopes.join(', ')}</p>
-                    <p><strong>Expires:</strong> ${info.expires_at ? new Date(info.expires_at).toLocaleString() : 'Unknown'}</p>
-                    <button onclick="logout('${hostname}')">Logout</button>
-                </div>
-            `).join('');
+            const connections = JSON.parse(localStorage.getItem('oauth_connections') || '{}');
+            document.getElementById('connections').innerHTML = Object.keys(connections).length ?
+                Object.entries(connections).map(([host, info]) =>
+                    `<div class="connection">
+                        <h4>${host}</h4>
+                        <p>Expires: ${info.expires ? new Date(info.expires).toLocaleString() : 'Unknown'}</p>
+                        <button onclick="logout('${host}')">Logout</button>
+                    </div>`
+                ).join('') : '<p>No connections</p>';
         }
 
-        function logout(hostname) {
-            const connections = getStoredConnections();
-            delete connections[hostname];
+        function logout(host) {
+            const connections = JSON.parse(localStorage.getItem('oauth_connections') || '{}');
+            delete connections[host];
             localStorage.setItem('oauth_connections', JSON.stringify(connections));
-            showStatus(`Logged out from ${hostname}`, 'success');
             renderConnections();
         }
 
-        function showStatus(message, type) {
-            const status = document.getElementById('status');
-            status.className = type;
-            status.textContent = message;
-
-            if (type !== 'error') {
-                setTimeout(() => {
-                    status.textContent = '';
-                }, 3000);
-            }
+        function showStatus(msg, type) {
+            const el = document.getElementById('status');
+            el.textContent = msg;
+            el.className = type;
+            if (type !== 'error') setTimeout(() => el.textContent = '', 3000);
         }
     </script>
 </body>
