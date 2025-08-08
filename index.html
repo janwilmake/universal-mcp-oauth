@@ -1,51 +1,13 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simple OAuth Connector</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-
-        input,
-        button {
-            width: 100%;
-            padding: 8px;
-            margin: 5px 0;
-        }
-
-        button {
-            background: #007cba;
-            color: white;
-            border: none;
-            cursor: pointer;
-        }
-
-        .connection {
-            border: 1px solid #ddd;
-            padding: 10px;
-            margin: 10px 0;
-        }
-
-        .error {
-            color: red;
-        }
-
-        .success {
-            color: green;
-        }
-    </style>
+    <title>OAuth Connector</title>
 </head>
 
 <body>
-    <h1>Simple OAuth Connector</h1>
-    <input id="hostname" placeholder="OAuth Server Hostname (auth.example.com)">
+    <h1>OAuth Connector</h1>
+    <input id="host" placeholder="OAuth Server (auth.example.com)">
     <button onclick="connect()">Connect</button>
     <div id="status"></div>
     <div id="connections"></div>
@@ -53,38 +15,28 @@
     <script>
         const REDIRECT = 'https://connect.simplerauth.com';
 
-        window.onload = () => { handleCallback(); renderConnections(); };
+        onload = () => { handleCallback(); renderConnections(); };
 
         async function connect() {
-            const host = document.getElementById('hostname').value.trim();
-            if (!host) return showStatus('Enter hostname', 'error');
+            const host = document.getElementById('host').value.trim();
+            if (!host) return status('Enter hostname', 'red');
 
             try {
-                showStatus('Connecting...', '');
-
-                // Discover & register
+                status('Connecting...');
                 const meta = await fetch(`https://${host}/.well-known/oauth-authorization-server`).then(r => r.json());
                 const client = await fetch(meta.registration_endpoint, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        redirect_uris: [REDIRECT],
-                        client_name: 'OAuth Connector',
-                        grant_types: ['authorization_code'],
-                        response_types: ['code']
+                        redirect_uris: [REDIRECT], client_name: 'OAuth Connector',
+                        grant_types: ['authorization_code'], response_types: ['code']
                     })
                 }).then(r => r.json());
 
-                // Store & redirect
                 const state = Math.random().toString(36).substr(2);
-                sessionStorage.setItem('oauth_data', JSON.stringify({ client, meta, state }));
-
-                location.href = `${meta.authorization_endpoint}?${new URLSearchParams({
-                    response_type: 'code', client_id: client.client_id,
-                    redirect_uri: REDIRECT, state, scope: 'openid profile'
-                })}`;
-
-            } catch (e) { showStatus(`Failed: ${e.message}`, 'error'); }
+                sessionStorage.oauth_data = JSON.stringify({ client, meta, state });
+                location.href = `${meta.authorization_endpoint}?response_type=code&client_id=${client.client_id}&redirect_uri=${REDIRECT}&state=${state}&scope=openid profile`;
+            } catch (e) { status('Failed: ' + e.message, 'red'); }
         }
 
         async function handleCallback() {
@@ -92,61 +44,57 @@
             const code = params.get('code'), state = params.get('state');
             if (!code) return;
 
-            const data = JSON.parse(sessionStorage.getItem('oauth_data') || '{}');
-            if (state !== data.state) return showStatus('Invalid state', 'error');
+            const data = JSON.parse(sessionStorage.oauth_data || '{}');
+            if (state !== data.state) return status('Invalid state', 'red');
 
             try {
                 const token = await fetch(data.meta.token_endpoint, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                     body: new URLSearchParams({
-                        grant_type: 'authorization_code', code,
-                        redirect_uri: REDIRECT, client_id: data.client.client_id
+                        grant_type: 'authorization_code', code, redirect_uri: REDIRECT, client_id: data.client.client_id
                     })
                 }).then(r => r.json());
 
-                // Store connection
-                const connections = JSON.parse(localStorage.getItem('oauth_connections') || '{}');
+                const connections = JSON.parse(localStorage.oauth_connections || '{}');
                 const hostname = new URL(data.meta.issuer).hostname;
                 connections[hostname] = {
-                    access_token: token.access_token,
-                    issuer: data.meta.issuer,
+                    access_token: token.access_token, issuer: data.meta.issuer,
                     expires: token.expires_in ? Date.now() + token.expires_in * 1000 : null
                 };
-                localStorage.setItem('oauth_connections', JSON.stringify(connections));
+                localStorage.oauth_connections = JSON.stringify(connections);
 
-                sessionStorage.removeItem('oauth_data');
+                delete sessionStorage.oauth_data;
                 history.replaceState({}, '', location.pathname);
-                showStatus(`Connected to ${hostname}`, 'success');
+                status('Connected to ' + hostname, 'green');
                 renderConnections();
-
-            } catch (e) { showStatus(`Token failed: ${e.message}`, 'error'); }
+            } catch (e) { status('Token failed: ' + e.message, 'red'); }
         }
 
         function renderConnections() {
-            const connections = JSON.parse(localStorage.getItem('oauth_connections') || '{}');
+            const connections = JSON.parse(localStorage.oauth_connections || '{}');
             document.getElementById('connections').innerHTML = Object.keys(connections).length ?
                 Object.entries(connections).map(([host, info]) =>
-                    `<div class="connection">
-                        <h4>${host}</h4>
-                        <p>Expires: ${info.expires ? new Date(info.expires).toLocaleString() : 'Unknown'}</p>
-                        <button onclick="logout('${host}')">Logout</button>
-                    </div>`
+                    `<div style="border:1px solid #ddd;padding:10px;margin:10px 0">
+                <h4>${host}</h4>
+                <p>Expires: ${info.expires ? new Date(info.expires).toLocaleString() : 'Unknown'}</p>
+                <button onclick="logout('${host}')">Logout</button>
+            </div>`
                 ).join('') : '<p>No connections</p>';
         }
 
         function logout(host) {
-            const connections = JSON.parse(localStorage.getItem('oauth_connections') || '{}');
+            const connections = JSON.parse(localStorage.oauth_connections || '{}');
             delete connections[host];
-            localStorage.setItem('oauth_connections', JSON.stringify(connections));
+            localStorage.oauth_connections = JSON.stringify(connections);
             renderConnections();
         }
 
-        function showStatus(msg, type) {
+        function status(msg, color = '') {
             const el = document.getElementById('status');
             el.textContent = msg;
-            el.className = type;
-            if (type !== 'error') setTimeout(() => el.textContent = '', 3000);
+            el.style.color = color;
+            if (color !== 'red') setTimeout(() => el.textContent = '', 3000);
         }
     </script>
 </body>

@@ -31,9 +31,10 @@ Not used:
 
 - `/.well-known/oauth-protected-resource`: https://www.rfc-editor.org/rfc/rfc9728.txt
 
-Initial iteration:
+Prompts:
 
-- https://letmeprompt.com/rules-httpsuithu-6btu890
+- HTML Client implementation: https://letmeprompt.com/rules-httpsuithu-6btu890
+- Cloudflare Worker implementation: https://letmeprompt.com/rules-httpsuithu-xtjor90
 
 # Related work
 
