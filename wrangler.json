@@ -1,0 +1,8 @@
+{
+  "$schema": "https://unpkg.com/wrangler@latest/config-schema.json",
+  "name": "oauth-discovery-checker",
+  "compatibility_date": "2025-08-07",
+  "dev": { "port": 3000 },
+  "assets": { "directory": "./" },
+  "routes": [{ "custom_domain": true, "pattern": "connect.simplerauth.com" }]
+}

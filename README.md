@@ -9,8 +9,13 @@ Example usecases include:
 - A URL-based context editor that allows any URL, but if URL hosts allow for login, instruct user to login
 - Any other client where you want to support thousands of integrations without any maintenance.
 
-# Domain-based oauth
+# Domain-based OAuth
 
 Domain-based OAuth -> Will allow using different MCPs with easy sign-in, but also URL fetching.
 
 If you pass any URL, we need to use the MCP-standardized way of discovering oauth. If possible, direct user to signup/login with client. Credentials should be stored in central store. This in itself is super valuable and should be plugable into any website.
+
+# Related work
+
+- https://github.com/janwilmake/xmoney-provider
+- https://github.com/janwilmake/simplerauth-provider
