@@ -9,6 +9,11 @@ Example usecases include:
 - A URL-based context editor that allows any URL, but if URL hosts allow for login, instruct user to login
 - Any other client where you want to support thousands of integrations without any maintenance.
 
+# Implementations
+
+- [html client](index.html)
+- [cloudflare worker client with DO storage](#) coming soon
+
 # Domain-based OAuth
 
 Domain-based OAuth -> Will allow using different MCPs with easy sign-in, but also URL fetching.
@@ -18,4 +23,4 @@ If you pass any URL, we need to use the MCP-standardized way of discovering oaut
 # Related work
 
 - https://github.com/janwilmake/xmoney-provider
-- https://github.com/janwilmake/simplerauth-provider
+- https://github.com/janwilmake/simplerauth-provider (for any hostname, we should be able to check whether or not we can register with dynamic client registration, and what the authorize URL is)
