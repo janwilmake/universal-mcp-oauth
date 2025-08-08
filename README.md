@@ -12,18 +12,28 @@ Example usecases include:
 # Implementations
 
 - [html client](index.html)
-- [cloudflare worker client with DO storage](#) coming soon
+- [cloudflare worker client with DO storage](#) coming soon - If you pass any URL, we need to use the MCP-standardized way of discovering oauth. If possible, direct user to signup/login with client. Credentials should be stored in central store. This in itself is super valuable and should be plugable into any website.
 
-# Domain-based OAuth
+# 1. Required Context
 
-Domain-based OAuth -> Will allow using different MCPs with easy sign-in, but also URL fetching.
+Any implementation should leverage rfc8414 and rfc7591 to
 
-If you pass any URL, we need to use the MCP-standardized way of discovering oauth. If possible, direct user to signup/login with client. Credentials should be stored in central store. This in itself is super valuable and should be plugable into any website.
+1. Find info about if and how to oauth
+2. Register a client to get a client_id (and maybe secret)
+3. Since getting a logo, name, and description of the provider its not part of these specs, the implementation should fetch root of the same hostname, with accept text/html, and then, parse html to get title, icon and meta description
 
-# Useful Context
+Spec used:
 
-- https://www.rfc-editor.org/rfc/rfc8414.txt
-- https://www.rfc-editor.org/rfc/rfc9728.txt
+- `/.well-known/oauth-authorization-server`: https://www.rfc-editor.org/rfc/rfc8414.txt
+- `/register`: https://www.rfc-editor.org/rfc/rfc7591.txt
+
+Not used:
+
+- `/.well-known/oauth-protected-resource`: https://www.rfc-editor.org/rfc/rfc9728.txt
+
+Initial iteration:
+
+- https://letmeprompt.com/rules-httpsuithu-6btu890
 
 # Related work
 
