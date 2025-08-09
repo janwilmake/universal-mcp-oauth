@@ -2,6 +2,7 @@
 
 1. Specify required implementation for MCP-compatible Dynamic client regiration
 2. With that, Create a generic package that can easily be added to any Cloudflare Worker to allow the user to login to any website that supports this protocol.
+3. Follow best practices of MCP [Authorization](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization#dynamic-client-registration) and [Security](https://modelcontextprotocol.io/specification/2025-06-18/basic/security_best_practices)
 
 Example usecases include:
 
