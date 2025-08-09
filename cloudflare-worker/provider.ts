@@ -1,8 +1,93 @@
+import { DurableObject } from "cloudflare:workers";
+
 type Env = {
   AuthProvider: DurableObjectNamespace;
   CLIENT_ID: string;
   CLIENT_SECRET: string;
 };
+
+interface User {
+  x_user_id: string;
+  username: string;
+  name: string;
+  profile_image_url: string | null;
+  verified: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+interface Login {
+  id: number;
+  x_user_id: string;
+  client_id: string;
+  access_token: string;
+  latest_login_code: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface UserWithLogin extends User {
+  id: number;
+  client_id: string;
+  access_token: string;
+  latest_login_code: string | null;
+}
+
+interface XUser {
+  id: string;
+  username: string;
+  name: string;
+  profile_image_url?: string;
+  verified: boolean;
+}
+
+interface XTokenResponse {
+  access_token: string;
+  refresh_token: string;
+  token_type?: string;
+  expires_in?: number;
+}
+
+interface XUserResponse {
+  data: XUser;
+}
+
+interface OAuthState {
+  clientId: string;
+  redirectUri: string;
+  state: string | null;
+  codeVerifier: string;
+}
+
+interface ClientRegistrationRequest {
+  redirect_uris: string[];
+  [key: string]: unknown;
+}
+
+interface ClientRegistrationResponse {
+  client_id: string;
+  redirect_uris: string[];
+  token_endpoint_auth_method: string;
+  grant_types: string[];
+  response_types: string[];
+}
+
+interface TokenRequest {
+  grant_type: string;
+  code: string;
+  client_id: string;
+  [key: string]: string;
+}
+
+interface TokenResponse {
+  access_token: string;
+  token_type: string;
+}
+
+interface ErrorResponse {
+  error: string;
+  error_description?: string;
+}
 
 export const oauthEndpoints = [
   "/.well-known/oauth-authorization-server",
@@ -11,19 +96,21 @@ export const oauthEndpoints = [
   "/authorize",
   "/callback",
   "/token",
-];
+] as const;
 
-export class AuthProvider {
+export class AuthProvider extends DurableObject {
   sql: SqlStorage;
   env: Env;
-  constructor(ctx: DurableObjectState, env) {
+
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env);
     this.sql = ctx.storage.sql;
     this.env = env;
     // Run migrations on startup
     this.migrate();
   }
 
-  migrate() {
+  migrate(): void {
     // Create users table
     this.sql.exec(`
       CREATE TABLE IF NOT EXISTS users (
@@ -64,7 +151,7 @@ export class AuthProvider {
     );
   }
 
-  async fetch(request) {
+  async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
 
@@ -132,7 +219,7 @@ export class AuthProvider {
       }
 
       try {
-        const body = await request.json();
+        const body = (await request.json()) as ClientRegistrationRequest;
 
         // Validate redirect_uris is present and is an array
         if (
@@ -140,56 +227,50 @@ export class AuthProvider {
           !Array.isArray(body.redirect_uris) ||
           body.redirect_uris.length === 0
         ) {
-          return new Response(
-            JSON.stringify({
-              error: "invalid_client_metadata",
-              error_description: "redirect_uris must be a non-empty array",
-            }),
-            {
-              status: 400,
-              headers: { "Content-Type": "application/json" },
-            }
-          );
+          const errorResponse: ErrorResponse = {
+            error: "invalid_client_metadata",
+            error_description: "redirect_uris must be a non-empty array",
+          };
+          return new Response(JSON.stringify(errorResponse), {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          });
         }
 
         // Extract hosts from all redirect URIs
-        const hosts = new Set();
+        const hosts = new Set<string>();
         for (const uri of body.redirect_uris) {
           try {
-            const url = new URL(uri);
-            hosts.add(url.host);
+            const parsedUrl = new URL(uri);
+            hosts.add(parsedUrl.host);
           } catch (e) {
-            return new Response(
-              JSON.stringify({
-                error: "invalid_redirect_uri",
-                error_description: `Invalid redirect URI: ${uri}`,
-              }),
-              {
-                status: 400,
-                headers: { "Content-Type": "application/json" },
-              }
-            );
+            const errorResponse: ErrorResponse = {
+              error: "invalid_redirect_uri",
+              error_description: `Invalid redirect URI: ${uri}`,
+            };
+            return new Response(JSON.stringify(errorResponse), {
+              status: 400,
+              headers: { "Content-Type": "application/json" },
+            });
           }
         }
 
         // Ensure all redirect URIs have the same host
         if (hosts.size !== 1) {
-          return new Response(
-            JSON.stringify({
-              error: "invalid_client_metadata",
-              error_description: "All redirect URIs must have the same host",
-            }),
-            {
-              status: 400,
-              headers: { "Content-Type": "application/json" },
-            }
-          );
+          const errorResponse: ErrorResponse = {
+            error: "invalid_client_metadata",
+            error_description: "All redirect URIs must have the same host",
+          };
+          return new Response(JSON.stringify(errorResponse), {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          });
         }
 
         const clientHost = Array.from(hosts)[0];
 
         // Response with client_id as the host
-        const response = {
+        const response: ClientRegistrationResponse = {
           client_id: clientHost,
           redirect_uris: body.redirect_uris,
           token_endpoint_auth_method: "none", // Public client, no secret needed
@@ -206,16 +287,14 @@ export class AuthProvider {
           },
         });
       } catch (error) {
-        return new Response(
-          JSON.stringify({
-            error: "invalid_client_metadata",
-            error_description: "Invalid JSON in request body",
-          }),
-          {
-            status: 400,
-            headers: { "Content-Type": "application/json" },
-          }
-        );
+        const errorResponse: ErrorResponse = {
+          error: "invalid_client_metadata",
+          error_description: "Invalid JSON in request body",
+        };
+        return new Response(JSON.stringify(errorResponse), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
       }
     }
 
@@ -257,7 +336,7 @@ export class AuthProvider {
         /[^a-zA-Z0-9]/g,
         "_"
       )}`;
-      let existingAccessToken = null;
+      let existingAccessToken: string | null = null;
 
       if (cookies) {
         const cookieMatch = cookies.match(
@@ -308,7 +387,7 @@ export class AuthProvider {
       const codeChallenge = await this.generateCodeChallenge(codeVerifier);
 
       // Store OAuth state
-      const oauthState = {
+      const oauthState: OAuthState = {
         clientId,
         redirectUri,
         state,
@@ -325,7 +404,7 @@ export class AuthProvider {
       xUrl.searchParams.set("state", stateString);
       xUrl.searchParams.set("code_challenge", codeChallenge);
       xUrl.searchParams.set("code_challenge_method", "S256");
-
+      //https://x.com/i/oauth2/authorize?response_type=code&client_id=MWlyVUFQWm5fN01qWTlnaVlBbmY6MTpjaQ&redirect_uri=https%3A%2F%2Funiversal.simplerauth.com%2Fcallback&scope=users.read+tweet.read+offline.access&state=eyJjbGllbnRJZCI6InVuaXZlcnNhbC5zaW1wbGVyYXV0aC5jb20iLCJyZWRpcmVjdFVyaSI6Imh0dHBzOi8vdW5pdmVyc2FsLnNpbXBsZXJhdXRoLmNvbS9jYWxsYmFjayIsInN0YXRlIjoiZGVtbyIsImNvZGVWZXJpZmllciI6IlFQT04yR0RIZmt6enBTa25EXzBReVZZMWdJazZPS243X1B5Mk9TZC1yOWMifQ%3D%3D&code_challenge=bHncIW3WIkKSyvQ-LOurmJl1S8YT4YqG-cfcB571h-E&code_challenge_method=S256
       return new Response(null, {
         status: 302,
         headers: {
@@ -344,12 +423,32 @@ export class AuthProvider {
         return new Response("Missing code or state", { status: 400 });
       }
 
-      // Parse state
-      let oauthState;
+      // Read the oauth_state cookie instead of using URL state param
+      const cookies = request.headers.get("Cookie");
+      let oauthStateString: string | null = null;
+
+      if (cookies) {
+        const cookieMatch = cookies.match(/oauth_state=([^;]+)/);
+        if (cookieMatch) {
+          oauthStateString = cookieMatch[1];
+        }
+      }
+
+      if (!oauthStateString) {
+        return new Response("Missing OAuth state cookie", { status: 400 });
+      }
+
+      // Parse state from cookie
+      let oauthState: OAuthState;
       try {
-        oauthState = JSON.parse(atob(stateParam));
+        oauthState = JSON.parse(atob(oauthStateString)) as OAuthState;
       } catch {
         return new Response("Invalid state format", { status: 400 });
+      }
+
+      // Verify the state parameter matches what we stored
+      if (stateParam !== oauthState.state) {
+        return new Response(`State parameter mismatch`, { status: 400 });
       }
 
       // Exchange code for X token
@@ -370,13 +469,15 @@ export class AuthProvider {
       });
 
       if (!tokenResponse.ok) {
-        return new Response("Failed to exchange code", { status: 400 });
+        return new Response(
+          `Failed to exchange code ${
+            tokenResponse.status
+          } - ${await tokenResponse.text()}`,
+          { status: 400 }
+        );
       }
 
-      const tokenData = await tokenResponse.json<{
-        access_token: string;
-        refresh_token: string;
-      }>();
+      const tokenData = await tokenResponse.json<XTokenResponse>();
 
       // Get X user info
       const userResponse = await fetch(
@@ -388,12 +489,14 @@ export class AuthProvider {
         return new Response("Failed to get user info", { status: 400 });
       }
 
-      const userData: any = await userResponse.json();
-      const xUser = userData.data;
-      xUser.profile_image_url = xUser.profile_image_url?.replace(
-        "_normal",
-        "_400x400"
-      );
+      const userData = await userResponse.json<XUserResponse>();
+      const xUser: XUser = {
+        ...userData.data,
+        profile_image_url: userData.data.profile_image_url?.replace(
+          "_normal",
+          "_400x400"
+        ),
+      };
 
       // Create user and login
       const accessToken = crypto.randomUUID();
@@ -436,12 +539,13 @@ export class AuthProvider {
       }
 
       const formData = await request.formData();
-      const grantType = formData.get("grant_type");
-      const code = formData.get("code");
-      const clientId = formData.get("client_id");
+      const grantType = formData.get("grant_type") as string | null;
+      const code = formData.get("code") as string | null;
+      const clientId = formData.get("client_id") as string | null;
 
       if (grantType !== "authorization_code" || !code || !clientId) {
-        return new Response(JSON.stringify({ error: "invalid_request" }), {
+        const errorResponse: ErrorResponse = { error: "invalid_request" };
+        return new Response(JSON.stringify(errorResponse), {
           status: 400,
           headers: {
             "Content-Type": "application/json",
@@ -453,7 +557,8 @@ export class AuthProvider {
       const loginData = await this.getLoginByCode(code);
 
       if (!loginData || loginData.client_id !== clientId) {
-        return new Response(JSON.stringify({ error: "invalid_grant" }), {
+        const errorResponse: ErrorResponse = { error: "invalid_grant" };
+        return new Response(JSON.stringify(errorResponse), {
           status: 400,
           headers: {
             "Content-Type": "application/json",
@@ -464,25 +569,24 @@ export class AuthProvider {
 
       await this.clearLoginCode(code);
 
-      return new Response(
-        JSON.stringify({
-          access_token: loginData.access_token,
-          token_type: "bearer",
-        }),
-        {
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-          },
-        }
-      );
+      const tokenResponse: TokenResponse = {
+        access_token: loginData.access_token,
+        token_type: "bearer",
+      };
+
+      return new Response(JSON.stringify(tokenResponse), {
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+        },
+      });
     }
 
     return new Response("Not found", { status: 404 });
   }
 
   // Database methods
-  async createOrUpdateUser(xUser) {
+  async createOrUpdateUser(xUser: XUser): Promise<void> {
     this.sql.exec(
       `INSERT OR REPLACE INTO users 
        (x_user_id, username, name, profile_image_url, verified, updated_at)
@@ -490,12 +594,17 @@ export class AuthProvider {
       xUser.id,
       xUser.username,
       xUser.name,
-      xUser.profile_image_url,
+      xUser.profile_image_url || null,
       xUser.verified
     );
   }
 
-  async createLogin(xUserId, clientId, accessToken, authCode) {
+  async createLogin(
+    xUserId: string,
+    clientId: string,
+    accessToken: string,
+    authCode: string
+  ): Promise<void> {
     this.sql.exec(
       `INSERT OR REPLACE INTO logins 
        (x_user_id, client_id, access_token, latest_login_code, updated_at)
@@ -507,7 +616,7 @@ export class AuthProvider {
     );
   }
 
-  async getLoginByToken(accessToken) {
+  async getLoginByToken(accessToken: string): Promise<UserWithLogin | null> {
     const result = this.sql
       .exec(
         `SELECT u.*, l.* FROM users u 
@@ -516,10 +625,10 @@ export class AuthProvider {
         accessToken
       )
       .toArray()[0];
-    return result || null;
+    return result ? (result as unknown as UserWithLogin) : null;
   }
 
-  async getLoginByCode(authCode) {
+  async getLoginByCode(authCode: string): Promise<UserWithLogin | null> {
     const result = this.sql
       .exec(
         `SELECT u.*, l.* FROM users u 
@@ -528,10 +637,10 @@ export class AuthProvider {
         authCode
       )
       .toArray()[0];
-    return result || null;
+    return result ? (result as unknown as UserWithLogin) : null;
   }
 
-  async clearLoginCode(authCode) {
+  async clearLoginCode(authCode: string): Promise<void> {
     this.sql.exec(
       `UPDATE logins SET latest_login_code = NULL, updated_at = CURRENT_TIMESTAMP 
        WHERE latest_login_code = ?`,
@@ -540,7 +649,7 @@ export class AuthProvider {
   }
 
   // Utility methods
-  isValidDomain(domain) {
+  isValidDomain(domain: string): boolean {
     const domainRegex =
       /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
     return (
@@ -548,7 +657,7 @@ export class AuthProvider {
     );
   }
 
-  generateCodeVerifier() {
+  generateCodeVerifier(): string {
     const array = new Uint8Array(32);
     crypto.getRandomValues(array);
     return btoa(String.fromCharCode.apply(null, Array.from(array)))
@@ -557,7 +666,7 @@ export class AuthProvider {
       .replace(/=/g, "");
   }
 
-  async generateCodeChallenge(verifier) {
+  async generateCodeChallenge(verifier: string): Promise<string> {
     const encoder = new TextEncoder();
     const data = encoder.encode(verifier);
     const digest = await crypto.subtle.digest("SHA-256", data);

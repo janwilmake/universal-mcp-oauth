@@ -1,7 +1,7 @@
 /// <reference types="@cloudflare/workers-types" />
 import { DurableObject } from "cloudflare:workers";
 import { AuthProvider, oauthEndpoints } from "./provider";
-import indexHTML from "./public/index.html";
+import indexHTML from "./index.html";
 
 export interface Env {
   AuthProvider: DurableObjectNamespace<AuthProvider>;
@@ -50,6 +50,7 @@ export default {
   },
 } satisfies ExportedHandler<Env>;
 
+export { AuthProvider } from "./provider";
 export class MCPProviders extends DurableObject<Env> {
   sql: SqlStorage;
 
@@ -127,7 +128,7 @@ async function getCurrentUser(request: Request, env: Env) {
 
   try {
     // Call a method on the auth provider to validate token and get user
-    const user = await authProvider.getUserByToken(token);
+    const user = await authProvider.getLoginByToken(token);
     return user;
   } catch {
     return null;
@@ -200,7 +201,12 @@ async function handleMCPLogin(
       });
     }
 
-    const metadata = await metadataResponse.json();
+    const metadata: {
+      registration_endpoint: string;
+      client_id: string;
+      authorization_endpoint: string;
+      token_endpoint: string;
+    } = await metadataResponse.json();
 
     // Register client if supported
     let clientId = hostname; // Default to hostname-as-client-id

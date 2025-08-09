@@ -13,5 +13,6 @@
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["AuthProvider", "MCPProviders"] }
-  ]
+  ],
+  "routes": [{ "custom_domain": true, "pattern": "universal.simplerauth.com" }]
 }
