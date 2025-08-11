@@ -8,10 +8,9 @@ https://universal.simplerauth.com
 - ✅ Test adding servers, see if it works here too
 - ✅ Create a separate HTML with a directory of supported MCPs so we can use click-to-login, not having to fill the url per-se
 - ✅ Ensure removing the provider again works too
-- In `handleMCPLogin`, perform "initialization" request: https://letmeprompt.com/rules-httpsuithu-xupwz10?key=result
-- After that, combine it with a allowing for non-authenticated MCP servers too; we should be able to connect with HTTP and see if connection could be established.
+- ✅ Researched and found the proper flow for mcp oauth (which can also be used for regular oauth!)
+- Improve this by adopting https://github.com/janwilmake/universal-mcp-oauth/tree/main/mcp-client-server-registration
 - Find a way to make `universal-mcp-oauth` very pluggable so people can make apps with this pattern more easily
-- Where I want it the most: in LMPIFY with XYText interface! And to be able to toolcall.
 
 # Use AI SDK?
 
