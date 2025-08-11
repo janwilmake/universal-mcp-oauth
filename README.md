@@ -21,12 +21,13 @@ Any implementation should leverage rfc8414 and rfc7591 to
 
 1. Find info about if and how to oauth
 2. Register a client to get a client_id (and maybe secret)
-3. Since getting a logo, name, and description of the provider its not part of these specs, the implementation should fetch root of the same hostname, with accept text/html, and then, parse html to get title, icon and meta description
 
 Spec used:
 
 - `/.well-known/oauth-authorization-server`: https://www.rfc-editor.org/rfc/rfc8414.txt
 - `/register`: https://www.rfc-editor.org/rfc/rfc7591.txt
+- MCP: https://uithub.com/modelcontextprotocol/modelcontextprotocol/blob/main/schema/2025-06-18/schema.ts
+- Initialization request: https://letmeprompt.com/rules-httpsuithu-xupwz10?key=result
 
 Not used:
 
@@ -46,3 +47,9 @@ Prompts:
 
 - https://github.com/janwilmake/xmoney-provider
 - https://github.com/janwilmake/simplerauth-provider (for any hostname, we should be able to check whether or not we can register with dynamic client registration, and what the authorize URL is)
+
+# Discoverability (`.well-known/mcp`?)
+
+This is not something that's determined yet. For now this repo will focus on post-oauth initialization and getting details from there, rather over HTTP.
+
+https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization.md

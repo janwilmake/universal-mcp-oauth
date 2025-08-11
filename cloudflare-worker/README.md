@@ -6,11 +6,14 @@ https://universal.simplerauth.com
 
 - ✅ Exchange https://github.com/janwilmake/simplerauth-provider with https://github.com/janwilmake/x-oauth-client-provider
 - ✅ Test adding servers, see if it works here too
-- Create a separate HTML with a directory of supported MCPs so we can use click-to-login, not having to fill the url per-se
-- Retrieve MCP server metadata (tools, logo, title, description). If this couldn't be done after successful login, have a way to log error
-- Ensure removing the provider again works too
+- ✅ Create a separate HTML with a directory of supported MCPs so we can use click-to-login, not having to fill the url per-se
+- ✅ Ensure removing the provider again works too
+- In `handleMCPLogin`, perform "initialization" request: https://letmeprompt.com/rules-httpsuithu-xupwz10?key=result
 - After that, combine it with a allowing for non-authenticated MCP servers too; we should be able to connect with HTTP and see if connection could be established.
-- This whole thing should be included by default into my boilerplate (but using `xmoney-provider`) and never need .env anymore for anything - instead, user logs in into any paid APIs. At least, this must be a possibility.
+- Find a way to make `universal-mcp-oauth` very pluggable so people can make apps with this pattern more easily
+- Where I want it the most: in LMPIFY with XYText interface! And to be able to toolcall.
+
+# Use AI SDK?
 
 Q: How does the AI SDK spec work and compare to other specs? might learn a lot from looking at custom providers
 

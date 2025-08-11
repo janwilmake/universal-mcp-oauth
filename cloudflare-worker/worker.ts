@@ -1,7 +1,8 @@
 /// <reference types="@cloudflare/workers-types" />
 import { DurableObject } from "cloudflare:workers";
 import homepage from "./homepage.html";
-import directory from "./directory.html";
+import directory from "./directory-template.html";
+//@ts-ignore
 import sampleData from "./sample.json";
 
 import { UserDO, withSimplerAuth } from "./x-oauth-client-provider";
