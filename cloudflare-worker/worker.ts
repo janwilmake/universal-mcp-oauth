@@ -1,6 +1,9 @@
 /// <reference types="@cloudflare/workers-types" />
 import { DurableObject } from "cloudflare:workers";
 import homepage from "./homepage.html";
+import directory from "./directory.html";
+import sampleData from "./sample.json";
+
 import { UserDO, withSimplerAuth } from "./x-oauth-client-provider";
 export { UserDO };
 
@@ -39,6 +42,16 @@ export default {
     if (url.pathname === "/") {
       return handleLandingPage(user, env, url.origin);
     }
+    if (url.pathname === "/directory") {
+      return handleDirectory();
+    }
+
+    if (url.pathname === "/remove" && request.method === "POST") {
+      if (!user) {
+        return new Response("Unauthorized", { status: 401 });
+      }
+      return handleRemoveProvider(request, user, env);
+    }
 
     if (url.pathname === "/login") {
       if (!user) {
@@ -57,6 +70,45 @@ export default {
     return new Response("Not found", { status: 404 });
   }),
 } satisfies ExportedHandler<Env>;
+
+async function handleDirectory() {
+  let html = directory;
+
+  // Inject the servers data
+  html = html.replace(
+    "</head>",
+    `<script>window.serversData = ${JSON.stringify(
+      sampleData
+    )};</script></head>`
+  );
+
+  return new Response(html, {
+    headers: { "Content-Type": "text/html" },
+  });
+}
+
+async function handleRemoveProvider(request: Request, user: any, env: Env) {
+  const url = new URL(request.url);
+  const hostname = url.searchParams.get("hostname");
+
+  if (!hostname) {
+    return new Response("Missing hostname parameter", { status: 400 });
+  }
+
+  try {
+    const mcpProviders = getMcpStub(env, user.x_user_id);
+    await mcpProviders.removeProvider(hostname);
+
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+}
 
 export class MCPProviders extends DurableObject<Env> {
   sql: SqlStorage;
