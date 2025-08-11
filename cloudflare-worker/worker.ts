@@ -1,32 +1,40 @@
 /// <reference types="@cloudflare/workers-types" />
 import { DurableObject } from "cloudflare:workers";
-import { AuthProvider, oauthEndpoints } from "./provider";
-import indexHTML from "./index.html";
+import homepage from "./homepage.html";
+import { UserDO, withSimplerAuth } from "./x-oauth-client-provider";
+export { UserDO };
 
 export interface Env {
-  AuthProvider: DurableObjectNamespace<AuthProvider>;
+  UserDO: DurableObjectNamespace<UserDO>;
   MCPProviders: DurableObjectNamespace<MCPProviders>;
   CLIENT_ID: string;
   CLIENT_SECRET: string;
 }
 
+type Provider = {
+  id: string;
+  hostname: string;
+  mcp_url: string;
+  client_id: string;
+  client_secret?: string;
+  access_token?: string;
+  token_type?: "Bearer" | string;
+  expires_at: number;
+  created_at: string;
+  updated_at: string;
+};
 export default {
-  async fetch(
-    request: Request,
-    env: Env,
-    ctx: ExecutionContext
-  ): Promise<Response> {
-    const url = new URL(request.url);
-
-    // Handle auth provider endpoints
-    if (oauthEndpoints.includes(url.pathname)) {
-      return env.AuthProvider.get(
-        env.AuthProvider.idFromName("oauth-central")
-      ).fetch(request);
+  fetch: withSimplerAuth(async (request, env, ctx) => {
+    if (!ctx.user) {
+      return new Response(null, {
+        status: 302,
+        headers: { Location: "/authorize" },
+      });
     }
 
-    // Get current user from session
-    const user = await getCurrentUser(request, env);
+    const { user } = ctx;
+
+    const url = new URL(request.url);
 
     if (url.pathname === "/") {
       return handleLandingPage(user, env, url.origin);
@@ -47,10 +55,9 @@ export default {
     }
 
     return new Response("Not found", { status: 404 });
-  },
+  }),
 } satisfies ExportedHandler<Env>;
 
-export { AuthProvider } from "./provider";
 export class MCPProviders extends DurableObject<Env> {
   sql: SqlStorage;
 
@@ -66,8 +73,10 @@ export class MCPProviders extends DurableObject<Env> {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         hostname TEXT NOT NULL UNIQUE,
         mcp_url TEXT NOT NULL,
+        client_id TEXT NOT NULL,
+        client_secret TEXT,
         access_token TEXT NOT NULL,
-        token_type TEXT DEFAULT 'bearer',
+        token_type TEXT DEFAULT 'Bearer',
         expires_at INTEGER,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -78,6 +87,8 @@ export class MCPProviders extends DurableObject<Env> {
   async addProvider(
     hostname: string,
     mcpUrl: string,
+    clientId: string,
+    clientSecret: string | null,
     accessToken: string,
     expiresIn?: number
   ) {
@@ -86,11 +97,13 @@ export class MCPProviders extends DurableObject<Env> {
     this.sql.exec(
       `
       INSERT OR REPLACE INTO providers 
-      (hostname, mcp_url, access_token, expires_at, updated_at)
-      VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+      (hostname, mcp_url, client_id, client_secret, access_token, expires_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     `,
       hostname,
       mcpUrl,
+      clientId,
+      clientSecret,
       accessToken,
       expiresAt
     );
@@ -106,7 +119,7 @@ export class MCPProviders extends DurableObject<Env> {
 
   async getAllProviders() {
     return this.sql
-      .exec(`SELECT * FROM providers ORDER BY created_at DESC`)
+      .exec<Provider>(`SELECT * FROM providers ORDER BY created_at DESC`)
       .toArray();
   }
 
@@ -115,51 +128,20 @@ export class MCPProviders extends DurableObject<Env> {
   }
 }
 
-async function getCurrentUser(request: Request, env: Env) {
-  const authHeader = request.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
-    return null;
-  }
-
-  const token = authHeader.substring(7);
-  const authProvider = env.AuthProvider.get(
-    env.AuthProvider.idFromName("oauth-central")
-  );
-
-  try {
-    // Call a method on the auth provider to validate token and get user
-    const user = await authProvider.getLoginByToken(token);
-    return user;
-  } catch {
-    return null;
-  }
-}
-
 async function handleLandingPage(user: any, env: Env, origin: string) {
-  let html = indexHTML;
+  let html = homepage;
 
   if (user) {
     // Get user's MCP providers
-    const mcpProviders = env.MCPProviders.get(
-      env.MCPProviders.idFromName(user.x_user_id)
-    );
+    const mcpProviders = getMcpStub(env, user.x_user_id);
     const providers = await mcpProviders.getAllProviders();
 
     // Build MCP servers array for the curl example
-    const mcpServers = providers.map((provider: any) => ({
-      type: "url",
-      url: provider.mcp_url,
-      name: provider.hostname,
-      headers: {
-        Authorization: `${provider.token_type} ${provider.access_token}`,
-      },
-    }));
 
     const userData = {
       user,
       providers,
-      mcpServers,
-      curlExample: generateCurlExample(mcpServers),
+      curlExample: generateCurlExample(providers),
     };
 
     // Inject data into HTML
@@ -202,44 +184,62 @@ async function handleMCPLogin(
     }
 
     const metadata: {
-      registration_endpoint: string;
-      client_id: string;
+      registration_endpoint?: string;
+      client_id?: string;
       authorization_endpoint: string;
       token_endpoint: string;
     } = await metadataResponse.json();
 
-    // Register client if supported
-    let clientId = hostname; // Default to hostname-as-client-id
-
-    if (metadata.registration_endpoint) {
-      const registrationResponse = await fetch(metadata.registration_endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          redirect_uris: [`${origin}/callback/${hostname}`],
-          client_name: "Universal MCP OAuth",
-          grant_types: ["authorization_code"],
-          response_types: ["code"],
-        }),
-      });
-
-      if (registrationResponse.ok) {
-        const clientData = await registrationResponse.json();
-        clientId = clientData.client_id;
-      }
+    // Dynamic client registration is required
+    if (!metadata.registration_endpoint) {
+      return new Response(
+        `MCP server at ${hostname} does not support dynamic client registration`,
+        { status: 400 }
+      );
     }
 
-    // Generate state
+    // Register client
+    const registrationResponse = await fetch(metadata.registration_endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        redirect_uris: [`${origin}/callback/${hostname}`],
+        client_name: "Universal MCP OAuth",
+        grant_types: ["authorization_code"],
+        response_types: ["code"],
+      }),
+    });
+
+    if (!registrationResponse.ok) {
+      const errorText = await registrationResponse.text();
+      return new Response(
+        `Client registration failed for ${hostname}: ${registrationResponse.status} ${errorText}`,
+        { status: 400 }
+      );
+    }
+
+    const clientData = await registrationResponse.json();
+
+    if (!clientData.client_id) {
+      return new Response(
+        `Client registration for ${hostname} did not return a client_id`,
+        { status: 400 }
+      );
+    }
+
+    // Generate state with client credentials
     const state = JSON.stringify({
       mcpUrl,
       hostname,
       userId: user.x_user_id,
+      clientId: clientData.client_id,
+      clientSecret: clientData.client_secret || null,
     });
 
     // Build authorization URL
     const authUrl = new URL(metadata.authorization_endpoint);
     authUrl.searchParams.set("response_type", "code");
-    authUrl.searchParams.set("client_id", clientId);
+    authUrl.searchParams.set("client_id", clientData.client_id);
     authUrl.searchParams.set("redirect_uri", `${origin}/callback/${hostname}`);
     authUrl.searchParams.set("state", btoa(state));
     authUrl.searchParams.set("scope", "openid profile");
@@ -275,36 +275,64 @@ async function handleMCPCallback(request: Request, user: any, env: Env) {
       return new Response("Invalid state", { status: 400 });
     }
 
+    if (!state.clientId) {
+      return new Response("Missing client credentials in state", {
+        status: 400,
+      });
+    }
+
     // Get OAuth metadata again
     const metadataUrl = `https://${hostname}/.well-known/oauth-authorization-server`;
-    const metadata = await fetch(metadataUrl).then((r) => r.json());
+    const metadataResponse = await fetch(metadataUrl);
+
+    if (!metadataResponse.ok) {
+      return new Response("Failed to fetch OAuth metadata", { status: 400 });
+    }
+
+    const metadata = await metadataResponse.json();
+
+    // Prepare token request body
+    const tokenRequestBody = new URLSearchParams({
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: url.origin + url.pathname,
+      client_id: state.clientId,
+    });
+
+    // Add client_secret if available
+    if (state.clientSecret) {
+      tokenRequestBody.append("client_secret", state.clientSecret);
+    }
 
     // Exchange code for token
     const tokenResponse = await fetch(metadata.token_endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        grant_type: "authorization_code",
-        code,
-        redirect_uri: url.origin + url.pathname,
-        client_id: hostname, // Using hostname-as-client-id
-      }),
+      body: tokenRequestBody,
     });
 
     if (!tokenResponse.ok) {
-      return new Response("Token exchange failed", { status: 400 });
+      const errorText = await tokenResponse.text();
+      return new Response(
+        `Token exchange failed: ${tokenResponse.status} ${errorText}`,
+        { status: 400 }
+      );
     }
 
     const tokenData = await tokenResponse.json();
 
-    // Store provider credentials
-    const mcpProviders = env.MCPProviders.get(
-      env.MCPProviders.idFromName(user.x_user_id)
-    );
+    if (!tokenData.access_token) {
+      return new Response("No access token received", { status: 400 });
+    }
+
+    // Store provider credentials with proper client credentials
+    const mcpProviders = getMcpStub(env, user.x_user_id);
 
     await mcpProviders.addProvider(
       hostname,
       state.mcpUrl,
+      state.clientId,
+      state.clientSecret,
       tokenData.access_token,
       tokenData.expires_in
     );
@@ -322,49 +350,63 @@ async function handleMCPCallback(request: Request, user: any, env: Env) {
   }
 }
 
-export async function getAuthorization(
-  env: Env,
-  urlString: string,
-  userId: string
-): Promise<Record<string, string> | null> {
-  try {
-    const url = new URL(urlString);
-    const hostname = url.hostname;
+const getMcpStub = (env: Env, userId: string) => {
+  return env.MCPProviders.get(env.MCPProviders.idFromName("v2" + userId));
+};
 
-    const mcpProviders = env.MCPProviders.get(
-      env.MCPProviders.idFromName(userId)
-    );
-
-    const provider = await mcpProviders.getProvider(hostname);
-
-    if (!provider) {
-      return null;
-    }
-
-    // Check if token is expired
-    if (provider.expires_at && Date.now() > provider.expires_at) {
-      return null;
-    }
-
-    return {
+function generateCurlExample(providers: Provider[]) {
+  const mcpServers = providers.map((provider) => ({
+    type: "url",
+    url: provider.mcp_url,
+    name: provider.hostname,
+    headers: {
       Authorization: `${provider.token_type} ${provider.access_token}`,
-    };
-  } catch {
-    return null;
-  }
-}
+    },
+  }));
 
-function generateCurlExample(mcpServers: any[]) {
-  return `curl -X POST "https://api.parallel.ai/v1/tasks/runs" \\
-  -H "x-api-key: YOUR_API_KEY" \\
+  const tools = providers.map((provider) => {
+    return {
+      type: "mcp",
+      server_label: provider.hostname,
+      server_url: provider.mcp_url,
+      require_approval: "never",
+      headers: {
+        Authorization: `${provider.token_type} ${provider.access_token}`,
+      },
+    };
+  });
+
+  const stringify = (json: any) =>
+    JSON.stringify(json, null, 6).replace(/\n/g, "\n    ");
+
+  return `curl https://api.anthropic.com/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $ANTHROPIC_API_KEY" \
+  -H "anthropic-version: 2023-06-01" \
+  -H "anthropic-beta: mcp-client-2025-04-04" \
+  -d '{
+    "model": "claude-sonnet-4-20250514",
+    "max_tokens": 1000,
+    "messages": [{"role": "user", "content": "What tools do you have available?"}],
+    "mcp_servers": ${stringify(mcpServers)}
+  }'
+  
+curl -X POST "https://api.parallel.ai/v1/tasks/runs" \\
+  -H "x-api-key: $PARALLEL_API_KEY" \\
   -H 'content-type: application/json' \\
   -H "parallel-beta: mcp-server-2025-07-17" \\
   --data '{
     "input": "What can you help me with?",
-    "processor": "lite",
-    "mcp_servers": ${JSON.stringify(mcpServers, null, 6).replace(
-      /\n/g,
-      "\n    "
-    )}
-  }'`;
+    "mcp_servers": ${stringify(mcpServers)}
+  }'
+  
+curl https://api.openai.com/v1/responses \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $OPENAI_API_KEY" \
+  -d '{
+  "model": "gpt-5",
+  "tools": ${stringify(tools)},
+  "input": "What transport protocols are supported in the 2025-03-26 version of the MCP spec?"
+}'
+`;
 }

@@ -1,18 +1,17 @@
 {
   "$schema": "https://unpkg.com/wrangler@latest/config-schema.json",
-  "name": "universal-mcp-oauth",
+  "name": "universal-mcp-oauth2",
   "main": "worker.ts",
   "compatibility_date": "2025-08-08",
-  "assets": { "directory": "./" },
   "observability": { "logs": { "enabled": true } },
   "durable_objects": {
     "bindings": [
-      { "name": "AuthProvider", "class_name": "AuthProvider" },
+      { "name": "UserDO", "class_name": "UserDO" },
       { "name": "MCPProviders", "class_name": "MCPProviders" }
     ]
   },
   "migrations": [
-    { "tag": "v1", "new_sqlite_classes": ["AuthProvider", "MCPProviders"] }
+    { "tag": "v1", "new_sqlite_classes": ["UserDO", "MCPProviders"] }
   ],
   "routes": [{ "custom_domain": true, "pattern": "universal.simplerauth.com" }]
 }
