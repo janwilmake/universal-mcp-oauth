@@ -9,6 +9,6 @@ https://universal.simplerauth.com
 - ✅ Create a separate HTML with a directory of supported MCPs so we can use click-to-login, not having to fill the url per-se
 - ✅ Ensure removing the provider again works too
 - ✅ Researched and found the proper flow for mcp oauth (which can also be used for regular oauth!)
-- Improve this by adopting https://github.com/janwilmake/universal-mcp-oauth/tree/main/mcp-client-server-registration
+- Improve this by adopting https://uithub.com/janwilmake/universal-mcp-oauth/tree/main/mcp-client-server-registration
 - Find a way to make `universal-mcp-oauth` very pluggable so people can make apps with this pattern more easily.
 - Create parallel recipe for MCP tasks ([parallel-tool-calling](../parallel-tool-calling/))

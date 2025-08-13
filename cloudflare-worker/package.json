@@ -1,5 +1,8 @@
 {
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250809.0"
+  },
+  "dependencies": {
+    "mcp-client-server-registration": "^0.0.1"
   }
 }

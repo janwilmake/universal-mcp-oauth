@@ -1,5 +1,9 @@
 /// <reference types="@cloudflare/workers-types" />
+/// <reference lib="esnext" />
+//@ts-check
+
 import { DurableObject } from "cloudflare:workers";
+import { constructMCPAuthorizationUrl } from "./mcp-client-server-registration.js";
 import homepage from "./homepage.html";
 import directory from "./directory-template.html";
 //@ts-ignore
@@ -19,14 +23,16 @@ type Provider = {
   id: string;
   hostname: string;
   mcp_url: string;
-  client_id: string;
+  client_id?: string;
   client_secret?: string;
   access_token?: string;
   token_type?: "Bearer" | string;
-  expires_at: number;
+  expires_at?: number;
   created_at: string;
   updated_at: string;
+  public?: boolean;
 };
+
 export default {
   fetch: withSimplerAuth(async (request, env, ctx) => {
     if (!ctx.user) {
@@ -126,13 +132,14 @@ export class MCPProviders extends DurableObject<Env> {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         hostname TEXT NOT NULL UNIQUE,
         mcp_url TEXT NOT NULL,
-        client_id TEXT NOT NULL,
+        client_id TEXT,
         client_secret TEXT,
-        access_token TEXT NOT NULL,
+        access_token TEXT,
         token_type TEXT DEFAULT 'Bearer',
         expires_at INTEGER,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        public BOOLEAN DEFAULT 0
       )
     `);
   }
@@ -140,25 +147,27 @@ export class MCPProviders extends DurableObject<Env> {
   async addProvider(
     hostname: string,
     mcpUrl: string,
-    clientId: string,
-    clientSecret: string | null,
-    accessToken: string,
-    expiresIn?: number
+    clientId?: string,
+    clientSecret?: string,
+    accessToken?: string,
+    expiresIn?: number,
+    isPublic: boolean = false
   ) {
     const expiresAt = expiresIn ? Date.now() + expiresIn * 1000 : null;
 
     this.sql.exec(
       `
       INSERT OR REPLACE INTO providers 
-      (hostname, mcp_url, client_id, client_secret, access_token, expires_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      (hostname, mcp_url, client_id, client_secret, access_token, expires_at, updated_at, public)
+      VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
     `,
       hostname,
       mcpUrl,
-      clientId,
-      clientSecret,
-      accessToken,
-      expiresAt
+      clientId || null,
+      clientSecret || null,
+      accessToken || null,
+      expiresAt,
+      isPublic ? 1 : 0
     );
   }
 
@@ -225,89 +234,52 @@ async function handleMCPLogin(
   try {
     const mcpUrlObj = new URL(mcpUrl);
     const hostname = mcpUrlObj.hostname;
+    const callbackUrl = `${origin}/callback/${hostname}`;
 
-    // Discover OAuth metadata
-    const metadataUrl = `${mcpUrlObj.protocol}//${hostname}/.well-known/oauth-authorization-server`;
-    const metadataResponse = await fetch(metadataUrl);
+    const authFlowData = await constructMCPAuthorizationUrl(
+      mcpUrl,
+      callbackUrl
+    );
 
-    if (!metadataResponse.ok) {
-      return new Response(`MCP server at ${hostname} does not support OAuth`, {
-        status: 400,
+    // If no auth is required, add the provider immediately
+    if (authFlowData.noAuthRequired) {
+      const mcpProviders = getMcpStub(env, user.x_user_id);
+      await mcpProviders.addProvider(
+        hostname,
+        mcpUrl,
+        undefined, // no client_id for public servers
+        undefined, // no client_secret for public servers
+        undefined, // no access_token for public servers
+        undefined, // no expiration
+        true // mark as public
+      );
+
+      return new Response(null, {
+        status: 302,
+        headers: { Location: "/?success=1&public=1" },
       });
     }
 
-    const metadata: {
-      registration_endpoint?: string;
-      client_id?: string;
-      authorization_endpoint: string;
-      token_endpoint: string;
-    } = await metadataResponse.json();
-
-    // Dynamic client registration is required
-    if (!metadata.registration_endpoint) {
-      return new Response(
-        `MCP server at ${hostname} does not support dynamic client registration`,
-        { status: 400 }
-      );
-    }
-
-    // Register client
-    const registrationResponse = await fetch(metadata.registration_endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        redirect_uris: [`${origin}/callback/${hostname}`],
-        client_name: "Universal MCP OAuth",
-        grant_types: ["authorization_code"],
-        response_types: ["code"],
-      }),
-    });
-
-    if (!registrationResponse.ok) {
-      const errorText = await registrationResponse.text();
-      return new Response(
-        `Client registration failed for ${hostname}: ${registrationResponse.status} ${errorText}`,
-        { status: 400 }
-      );
-    }
-
-    const clientData = await registrationResponse.json();
-
-    if (!clientData.client_id) {
-      return new Response(
-        `Client registration for ${hostname} did not return a client_id`,
-        { status: 400 }
-      );
-    }
-
-    // Generate state with client credentials
-    const state = JSON.stringify({
-      mcpUrl,
-      hostname,
-      userId: user.x_user_id,
-      clientId: clientData.client_id,
-      clientSecret: clientData.client_secret || null,
-    });
-
-    // Build authorization URL
-    const authUrl = new URL(metadata.authorization_endpoint);
-    authUrl.searchParams.set("response_type", "code");
-    authUrl.searchParams.set("client_id", clientData.client_id);
-    authUrl.searchParams.set("redirect_uri", `${origin}/callback/${hostname}`);
-    authUrl.searchParams.set("state", btoa(state));
-    authUrl.searchParams.set("scope", "openid profile");
+    // Store auth flow data in cookie for callback
+    const authFlowCookie = btoa(
+      JSON.stringify({
+        ...authFlowData,
+        userId: user.x_user_id,
+        hostname: hostname,
+      })
+    );
 
     return new Response(null, {
       status: 302,
       headers: {
-        Location: authUrl.toString(),
-        "Set-Cookie": `oauth_state_${hostname}=${btoa(
-          state
-        )}; HttpOnly; Secure; SameSite=Lax; Max-Age=600; Path=/`,
+        Location: authFlowData.authorizationUrl,
+        "Set-Cookie": `mcp_auth_${hostname}=${authFlowCookie}; HttpOnly; Secure; SameSite=Lax; Max-Age=600; Path=/`,
       },
     });
   } catch (error) {
-    return new Response(`Invalid MCP URL: ${error.message}`, { status: 400 });
+    return new Response(`MCP authorization failed: ${error.message}`, {
+      status: 400,
+    });
   }
 }
 
@@ -321,46 +293,71 @@ async function handleMCPCallback(request: Request, user: any, env: Env) {
     return new Response("Missing code or state", { status: 400 });
   }
 
+  // Get auth flow data from cookie
+  const cookieName = `mcp_auth_${hostname}`;
+  const cookieHeader = request.headers.get("Cookie");
+  let authFlowData;
+
+  if (cookieHeader) {
+    const cookies = Object.fromEntries(
+      cookieHeader.split("; ").map((c) => c.split("="))
+    );
+
+    if (cookies[cookieName]) {
+      try {
+        authFlowData = JSON.parse(atob(cookies[cookieName]));
+      } catch (error) {
+        return new Response("Invalid auth flow data", { status: 400 });
+      }
+    }
+  }
+
+  if (!authFlowData) {
+    return new Response("Missing auth flow data", { status: 400 });
+  }
+
+  // Verify state matches
+  if (stateParam !== authFlowData.state) {
+    return new Response("Invalid state parameter", { status: 400 });
+  }
+
+  // Verify user matches
+  if (
+    authFlowData.userId !== user.x_user_id ||
+    authFlowData.hostname !== hostname
+  ) {
+    return new Response("Invalid session", { status: 400 });
+  }
+
+  if (!authFlowData.clientId || !authFlowData.tokenEndpoint) {
+    return new Response("Missing client credentials or token endpoint", {
+      status: 400,
+    });
+  }
+
   try {
-    const state = JSON.parse(atob(stateParam));
-
-    if (state.userId !== user.x_user_id || state.hostname !== hostname) {
-      return new Response("Invalid state", { status: 400 });
-    }
-
-    if (!state.clientId) {
-      return new Response("Missing client credentials in state", {
-        status: 400,
-      });
-    }
-
-    // Get OAuth metadata again
-    const metadataUrl = `https://${hostname}/.well-known/oauth-authorization-server`;
-    const metadataResponse = await fetch(metadataUrl);
-
-    if (!metadataResponse.ok) {
-      return new Response("Failed to fetch OAuth metadata", { status: 400 });
-    }
-
-    const metadata = await metadataResponse.json();
-
     // Prepare token request body
     const tokenRequestBody = new URLSearchParams({
       grant_type: "authorization_code",
       code,
-      redirect_uri: url.origin + url.pathname,
-      client_id: state.clientId,
+      redirect_uri: `${url.origin}/callback/${hostname}`,
+      client_id: authFlowData.clientId,
+      code_verifier: authFlowData.codeVerifier,
+      resource: authFlowData.mcpServerUrl, // Include resource parameter
     });
 
-    // Add client_secret if available
-    if (state.clientSecret) {
-      tokenRequestBody.append("client_secret", state.clientSecret);
+    // Add client_secret if available (confidential clients)
+    if (authFlowData.clientSecret) {
+      tokenRequestBody.append("client_secret", authFlowData.clientSecret);
     }
 
     // Exchange code for token
-    const tokenResponse = await fetch(metadata.token_endpoint, {
+    const tokenResponse = await fetch(authFlowData.tokenEndpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Accept: "application/json",
+      },
       body: tokenRequestBody,
     });
 
@@ -378,16 +375,17 @@ async function handleMCPCallback(request: Request, user: any, env: Env) {
       return new Response("No access token received", { status: 400 });
     }
 
-    // Store provider credentials with proper client credentials
+    // Store provider credentials
     const mcpProviders = getMcpStub(env, user.x_user_id);
 
     await mcpProviders.addProvider(
       hostname,
-      state.mcpUrl,
-      state.clientId,
-      state.clientSecret,
+      authFlowData.mcpServerUrl,
+      authFlowData.clientId,
+      authFlowData.clientSecret,
       tokenData.access_token,
-      tokenData.expires_in
+      tokenData.expires_in,
+      false // not a public server
     );
 
     // Redirect to landing page with success
@@ -395,11 +393,13 @@ async function handleMCPCallback(request: Request, user: any, env: Env) {
       status: 302,
       headers: {
         Location: "/?success=1",
-        "Set-Cookie": `oauth_state_${hostname}=; HttpOnly; Secure; SameSite=Lax; Max-Age=0; Path=/`,
+        "Set-Cookie": `${cookieName}=; HttpOnly; Secure; SameSite=Lax; Max-Age=0; Path=/`, // Clear auth cookie
       },
     });
   } catch (error) {
-    return new Response(`Callback failed: ${error.message}`, { status: 400 });
+    return new Response(`Token exchange failed: ${error.message}`, {
+      status: 400,
+    });
   }
 }
 
@@ -408,25 +408,43 @@ const getMcpStub = (env: Env, userId: string) => {
 };
 
 function generateCurlExample(providers: Provider[]) {
-  const mcpServers = providers.map((provider) => ({
-    type: "url",
-    url: provider.mcp_url,
-    name: provider.hostname,
-    headers: {
-      Authorization: `${provider.token_type} ${provider.access_token}`,
-    },
-  }));
+  const mcpServers = providers.map((provider) => {
+    const server = {
+      type: "url",
+      url: provider.mcp_url,
+      name: provider.hostname,
+    };
+
+    // Only add headers if provider has access token (not public)
+    if (provider.access_token) {
+      server.headers = {
+        Authorization: `${provider.token_type || "Bearer"} ${
+          provider.access_token
+        }`,
+      };
+    }
+
+    return server;
+  });
 
   const tools = providers.map((provider) => {
-    return {
+    const tool = {
       type: "mcp",
       server_label: provider.hostname,
       server_url: provider.mcp_url,
       require_approval: "never",
-      headers: {
-        Authorization: `${provider.token_type} ${provider.access_token}`,
-      },
     };
+
+    // Only add headers if provider has access token (not public)
+    if (provider.access_token) {
+      tool.headers = {
+        Authorization: `${provider.token_type || "Bearer"} ${
+          provider.access_token
+        }`,
+      };
+    }
+
+    return tool;
   });
 
   const stringify = (json: any) =>

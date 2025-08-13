@@ -45,21 +45,25 @@ function generateRandomState() {
  * @param {string} mcpUrl - The URL of the MCP server to authorize against
  * @param {string} callbackUrl - The redirect URI for the OAuth2 callback
  * @returns {Promise<{
- *   authorizationUrl: string,
- *   codeVerifier: string,
- *   state: string,
- *   tokenEndpoint: string,
- *   clientId: string,
+ *   authorizationUrl?: string,
+ *   codeVerifier?: string,
+ *   state?: string,
+ *   tokenEndpoint?: string,
+ *   clientId?: string,
  *   clientSecret?: string,
  *   registrationResponse?: object,
  *   mcpServerUrl: string,
- *   authServerMetadata: object
- * }>} Authorization flow data needed for token exchange
+ *   authServerMetadata?: object,
+ *   noAuthRequired?: boolean,
+ *   accessToken?: string
+ * }>} Authorization flow data needed for token exchange, or immediate access if no auth required
  * @throws {Error} When authorization server doesn't support required features or discovery fails
  */
 export async function constructMCPAuthorizationUrl(mcpUrl, callbackUrl) {
-  // Step 1: Initial MCP request to trigger 401 or discover resource metadata
+  // Step 1: Initial MCP request to check if auth is required
   let resourceMetadataUrl;
+  let noAuthRequired = false;
+  let accessToken = null;
 
   try {
     // Try MCP initialize request first
@@ -90,7 +94,15 @@ export async function constructMCPAuthorizationUrl(mcpUrl, callbackUrl) {
       }),
     });
 
-    if (initResponse.status === 401) {
+    if (initResponse.status === 200) {
+      // No authentication required - MCP server is public
+      noAuthRequired = true;
+      return {
+        mcpServerUrl: mcpUrl,
+        noAuthRequired: true,
+        accessToken: null, // Public servers don't need tokens
+      };
+    } else if (initResponse.status === 401) {
       // Extract resource metadata URL from WWW-Authenticate header
       const wwwAuth = initResponse.headers.get("WWW-Authenticate");
       if (wwwAuth) {
@@ -99,9 +111,11 @@ export async function constructMCPAuthorizationUrl(mcpUrl, callbackUrl) {
           resourceMetadataUrl = match[1];
         }
       }
+    } else {
+      throw new Error(`Unexpected response status: ${initResponse.status}`);
     }
   } catch (error) {
-    // Continue with fallback approach
+    // Continue with fallback approach for auth discovery
   }
 
   // Step 2: Get protected resource metadata
@@ -221,6 +235,7 @@ export async function constructMCPAuthorizationUrl(mcpUrl, callbackUrl) {
     registrationResponse,
     mcpServerUrl: mcpUrl,
     authServerMetadata: authMetadata,
+    noAuthRequired: false,
   };
 }
 
