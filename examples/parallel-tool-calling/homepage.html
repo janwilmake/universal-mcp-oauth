@@ -422,131 +422,6 @@
         const urlParams = new URLSearchParams(window.location.search);
         const success = urlParams.get('success');
 
-
-        function renderUserContent() {
-            const { user, providers, curlExample, hasApiKey } = window.userData;
-
-            document.getElementById('content').innerHTML = `
-                <div class="stats">
-                    <div class="stat">
-                        <span class="stat-number">${providers.length}</span>
-                        <span>Connected Servers</span>
-                    </div>
-                    <div class="stat">
-                        <span class="stat-number">${user.verified ? '✓' : '○'}</span>
-                        <span>Verified Account</span>
-                    </div>
-                    <div class="stat">
-                        <span class="stat-number">${hasApiKey ? '✓' : '○'}</span>
-                        <span>API Key Set</span>
-                    </div>
-                </div>
-                
-                <div>
-                    <p>Welcome back, <strong>${user.name}</strong> (@${user.username})</p>
-                    
-                    <div class="api-key-form">
-                        <h3>Parallel API Key</h3>
-                        <div class="form-group">
-                            <label for="apiKey">Your Parallel API Key</label>
-                            <input 
-                                type="password" 
-                                id="apiKey" 
-                                placeholder="Enter your Parallel API key"
-                                value="${hasApiKey ? '••••••••••••••••' : ''}"
-                            >
-                            <button onclick="setApiKey()">Update API Key</button>
-                        </div>
-                        <p style="font-size: 12px; color: #a0a0a0;">Get your API key from <a href="https://parallel.ai" style="color: #d0d090;">parallel.ai</a></p>
-                    </div>
-                    
-                    ${hasApiKey && providers.length > 0 ? `
-                        <div class="task-form" id="task-runner">
-                            <h3>Execute Task with MCP Tools</h3>
-                            <div class="form-group">
-                                <label>Select MCP Servers to use:</label>
-                                <div class="provider-selector">
-                                    ${providers.map(provider => `
-                                        <label>
-                                            <input type="checkbox" value="${provider.mcp_url}" data-name="${provider.name}">
-                                            ${provider.name} (${provider.mcp_url})
-                                        </label>
-                                    `).join('')}
-                                </div>
-                            </div>
-                            <div class="form-group">
-                                <label for="taskInput">Task Input</label>
-                                <textarea 
-                                    id="taskInput" 
-                                    placeholder="What would you like to do with these MCP tools?"
-                                ></textarea>
-                            </div>
-                            <button onclick="runTask()">Execute Task</button>
-                        </div>
-                    ` : ''}
-                    
-                    <div class="mcp-examples" id="examples">
-                        <h3>🚀 Popular MCP Tools for Tasks</h3>
-                        <p style="color: #b0b0b0; margin-bottom: 15px;">Click any example below to quickly connect and start using these powerful tools in your tasks.</p>
-                        <div class="mcp-grid">
-                            ${usefulMCPs.map(mcp => `
-                                <div class="mcp-card" onclick="fillMCPUrl('${mcp.url}')">
-                                    <h4>${mcp.name}</h4>
-                                    <p>${mcp.description}</p>
-                                    <span class="category">${mcp.category}</span>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                    
-                    <h2 id="add-server">Add Custom MCP Server</h2>
-                    <div class="form-group">
-                        <label for="mcpUrl">MCP Server URL</label>
-                        <input 
-                            type="url" 
-                            id="mcpUrl" 
-                            placeholder="https://your-mcp-server.com" 
-                            value=""
-                        >
-                        <button onclick="addMCPServer()">Connect MCP Server</button>
-                    </div>
-                    
-                    <h2>Your Connected Servers</h2>
-                    <div id="providers">
-                        ${providers.length === 0 ?
-                    '<div class="empty-state"><p>No MCP servers connected yet.<br>Try one of the examples above or add a custom server.</p></div>' :
-                    providers.map(provider => `
-                                <div class="provider">
-                                    <h4>🔗 ${provider.name}</h4>
-                                    <p><strong>URL:</strong> ${provider.mcp_url}</p>
-                                    <div class="meta">
-                                        <span>Connected: ${new Date(provider.created_at).toLocaleDateString()}</span>
-                                        ${provider.expires_at ? `<span>Expires: ${new Date(provider.expires_at).toLocaleDateString()}</span>` : '<span>No expiration</span>'}
-                                    </div>
-                                    <button onclick="removeMCPServer('${provider.mcp_url}')" class="danger">Remove Connection</button>
-                                </div>
-                            `).join('')
-                }
-                    </div>
-                    
-                    ${providers.length > 0 ? `
-                        <h2>Integration Examples</h2>
-                        <p>Use your connected MCP servers with these AI platforms:</p>
-                        <pre class="curl-example">${curlExample}</pre>
-                        <p><small>Replace <code>$ANTHROPIC_API_KEY</code>, <code>$PARALLEL_API_KEY</code>, and <code>$OPENAI_API_KEY</code> with your actual API keys.</small></p>
-                    ` : ''}
-                </div>
-            `;
-        }
-
-
-        if (window.userData) {
-            renderUserContent();
-            if (success) {
-                showSuccess('Successfully connected to MCP server!');
-            }
-        }
-
         const usefulMCPs = [
             {
                 name: "Linear",
@@ -737,6 +612,134 @@
             document.body.insertBefore(errorDiv, document.body.firstChild);
             setTimeout(() => errorDiv.remove(), 5000);
         }
+
+        function renderUserContent() {
+            const { user, providers, curlExample, hasApiKey } = window.userData;
+
+            document.getElementById('content').innerHTML = `
+                <div class="stats">
+                    <div class="stat">
+                        <span class="stat-number">${providers.length}</span>
+                        <span>Connected Servers</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-number">${user.verified ? '✓' : '○'}</span>
+                        <span>Verified Account</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-number">${hasApiKey ? '✓' : '○'}</span>
+                        <span>API Key Set</span>
+                    </div>
+                </div>
+                
+                <div>
+                    <p>Welcome back, <strong>${user.name}</strong> (@${user.username})</p>
+                    
+                    <div class="api-key-form">
+                        <h3>Parallel API Key</h3>
+                        <div class="form-group">
+                            <label for="apiKey">Your Parallel API Key</label>
+                            <input 
+                                type="password" 
+                                id="apiKey" 
+                                placeholder="Enter your Parallel API key"
+                                value="${hasApiKey ? '••••••••••••••••' : ''}"
+                            >
+                            <button onclick="setApiKey()">Update API Key</button>
+                        </div>
+                        <p style="font-size: 12px; color: #a0a0a0;">Get your API key from <a href="https://parallel.ai" style="color: #d0d090;">parallel.ai</a></p>
+                    </div>
+                    
+                    ${hasApiKey && providers.length > 0 ? `
+                        <div class="task-form" id="task-runner">
+                            <h3>Execute Task with MCP Tools</h3>
+                            <div class="form-group">
+                                <label>Select MCP Servers to use:</label>
+                                <div class="provider-selector">
+                                    ${providers.map(provider => `
+                                        <label>
+                                            <input type="checkbox" value="${provider.mcp_url}" data-name="${provider.name}">
+                                            ${provider.name} (${provider.mcp_url})
+                                        </label>
+                                    `).join('')}
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="taskInput">Task Input</label>
+                                <textarea 
+                                    id="taskInput" 
+                                    placeholder="What would you like to do with these MCP tools?"
+                                ></textarea>
+                            </div>
+                            <button onclick="runTask()">Execute Task</button>
+                        </div>
+                    ` : ''}
+                    
+                    <div class="mcp-examples" id="examples">
+                        <h3>🚀 Popular MCP Tools for Tasks</h3>
+                        <p style="color: #b0b0b0; margin-bottom: 15px;">Click any example below to quickly connect and start using these powerful tools in your tasks.</p>
+                        <div class="mcp-grid">
+                            ${usefulMCPs.map(mcp => `
+                                <div class="mcp-card" onclick="fillMCPUrl('${mcp.url}')">
+                                    <h4>${mcp.name}</h4>
+                                    <p>${mcp.description}</p>
+                                    <span class="category">${mcp.category}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    
+                    <h2 id="add-server">Add Custom MCP Server</h2>
+                    <div class="form-group">
+                        <label for="mcpUrl">MCP Server URL</label>
+                        <input 
+                            type="url" 
+                            id="mcpUrl" 
+                            placeholder="https://your-mcp-server.com" 
+                            value=""
+                        >
+                        <button onclick="addMCPServer()">Connect MCP Server</button>
+                    </div>
+                    
+                    <h2>Your Connected Servers</h2>
+                    <div id="providers">
+                        ${providers.length === 0 ?
+                    '<div class="empty-state"><p>No MCP servers connected yet.<br>Try one of the examples above or add a custom server.</p></div>' :
+                    providers.map(provider => `
+                                <div class="provider">
+                                    <h4>🔗 ${provider.name}</h4>
+                                    <p><strong>URL:</strong> ${provider.mcp_url}</p>
+                                    <div class="meta">
+                                        <span>Connected: ${new Date(provider.created_at).toLocaleDateString()}</span>
+                                        ${provider.expires_at ? `<span>Expires: ${new Date(provider.expires_at).toLocaleDateString()}</span>` : '<span>No expiration</span>'}
+                                    </div>
+                                    <button onclick="removeMCPServer('${provider.mcp_url}')" class="danger">Remove Connection</button>
+                                </div>
+                            `).join('')
+                }
+                    </div>
+                    
+                    ${providers.length > 0 ? `
+                        <h2>Integration Examples</h2>
+                        <p>Use your connected MCP servers with these AI platforms:</p>
+                        <pre class="curl-example">${curlExample}</pre>
+                        <p><small>Replace <code>$ANTHROPIC_API_KEY</code>, <code>$PARALLEL_API_KEY</code>, and <code>$OPENAI_API_KEY</code> with your actual API keys.</small></p>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+
+
+
+        if (window.userData) {
+            renderUserContent();
+            if (success) {
+                showSuccess('Successfully connected to MCP server!');
+            }
+        }
+
+
     </script>
 </body>
 
