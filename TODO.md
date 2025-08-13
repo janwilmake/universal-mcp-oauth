@@ -12,4 +12,6 @@
   - add refresh token rotation. figure out the best way to do this
     - maybe adding a proxy (/mcp/proxy/{url}) that performs refresh if token is expired will be best?
     - maybe just expose a function `refreshTokenIfNeeded(provider)` or even `stub.getFreshProviders(mcpUrls:string[]):Promise<MCPProvider[]>`
-- Create parallel recipe for MCP tasks ([parallel-tool-calling](../parallel-tool-calling/))
+- Test for many popular standalone servers that aren't hosted as part of a directory, see how good this implementation is. See what it supports and what it does NOT support.
+- Create parallel recipe for tasks that use MCPs ([parallel-tool-calling](../parallel-tool-calling/))
+  - Will also need either Stripeflare or 'login with parallel'.

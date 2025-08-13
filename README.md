@@ -1,3 +1,6 @@
+> [!WARNING]
+> Work in Progress. Not fully spec-compliant yet!
+
 # Goals
 
 1. Specify required implementation for MCP-compatible Dynamic client registration that follows best practices of MCP [Authorization](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization#dynamic-client-registration) and [Security](https://modelcontextprotocol.io/specification/2025-06-18/basic/security_best_practices)
