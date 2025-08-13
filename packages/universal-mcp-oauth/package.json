@@ -1,0 +1,8 @@
+{
+  "name": "universal-mcp-oauth",
+  "version": "0.0.2",
+  "main": "mod.ts",
+  "dependencies": {
+    "mcp-client-server-registration": "^0.0.3"
+  }
+}

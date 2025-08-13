@@ -1,8 +1,8 @@
 # Goals
 
-1. Specify required implementation for MCP-compatible Dynamic client regiration
+1. Specify required implementation for MCP-compatible Dynamic client registration that follows best practices of MCP [Authorization](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization#dynamic-client-registration) and [Security](https://modelcontextprotocol.io/specification/2025-06-18/basic/security_best_practices)
+
 2. With that, Create a generic package that can easily be added to any Cloudflare Worker to allow the user to login to any website that supports this protocol.
-3. Follow best practices of MCP [Authorization](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization#dynamic-client-registration) and [Security](https://modelcontextprotocol.io/specification/2025-06-18/basic/security_best_practices)
 
 Example usecases include:
 
@@ -10,12 +10,30 @@ Example usecases include:
 - A URL-based context editor that allows any URL, but if URL hosts allow for login, instruct user to login
 - Any other client where you want to support thousands of integrations without any maintenance.
 
+# Table of Contents
+
+Packages
+
+- [mcp-client-server-registration](packages/mcp-client-server-registration/)
+- [universal-mcp-oauth](packages/universal-mcp-oauth/)
+
+Examples
+
+- [HTML Client (uses slightly incorrect, older version)](examples/html-client/)
+- [Cloudflare Worker](examples/cloudflare-worker/)
+- [Parallel Tool Calling with MCP (coming soon)](examples/parallel-tool-calling/)
+
+Dependencies
+
+- [x-oauth-client-provider](https://github.com/janwilmake/x-oauth-client-provider)
+- Cloudflare Durable Objects
+
 Discuss
 
 - https://x.com/janwilmake/status/1954128444758864160
 - https://x.com/janwilmake/status/1953858441740513390
 
-# Required Context
+# Used Context
 
 Any implementation should leverage rfc8414 and rfc7591 to
 
@@ -37,19 +55,3 @@ Prompts:
 
 - HTML Client implementation: https://letmeprompt.com/rules-httpsuithu-6btu890
 - Cloudflare Worker implementation: https://letmeprompt.com/rules-httpsuithu-xtjor90
-
-# Implementations
-
-- [html client](index.html)
-- [cloudflare worker client with DO storage](cloudflare-worker)
-
-# Related work
-
-- https://github.com/janwilmake/xmoney-provider
-- https://github.com/janwilmake/simplerauth-provider (for any hostname, we should be able to check whether or not we can register with dynamic client registration, and what the authorize URL is)
-
-# Discoverability (`.well-known/mcp`?)
-
-This is not something that's determined yet. For now this repo will focus on post-oauth initialization and getting details from there, rather over HTTP.
-
-https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization.md

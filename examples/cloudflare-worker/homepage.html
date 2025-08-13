@@ -306,13 +306,13 @@
                     '<div class="empty-state"><p>No MCP servers connected yet.<br><a href="/directory">Browse our directory</a> or add a custom server above.</p></div>' :
                     providers.map(provider => `
                                 <div class="provider">
-                                    <h4>🔗 ${provider.hostname}</h4>
+                                    <h4>🔗 ${provider.name}</h4>
                                     <p><strong>URL:</strong> ${provider.mcp_url}</p>
                                     <div class="meta">
                                         <span>Connected: ${new Date(provider.created_at).toLocaleDateString()}</span>
                                         ${provider.expires_at ? `<span>Expires: ${new Date(provider.expires_at).toLocaleDateString()}</span>` : '<span>No expiration</span>'}
                                     </div>
-                                    <button onclick="removeMCPServer('${provider.hostname}')" style="background: #da3633; border-color: #da3633; width: auto; padding: 8px 16px; margin-top: 10px;">Remove Connection</button>
+                                    <button onclick="removeMCPServer('${provider.mcp_url}')" style="background: #da3633; border-color: #da3633; width: auto; padding: 8px 16px; margin-top: 10px;">Remove Connection</button>
                                 </div>
                             `).join('')
                 }
@@ -337,25 +337,20 @@
 
             try {
                 new URL(url);
-                window.location.href = `/login?url=${encodeURIComponent(url)}`;
+                window.location.href = `/mcp/login?url=${encodeURIComponent(url)}`;
             } catch (e) {
                 alert('Please enter a valid URL');
             }
         }
 
-        function removeMCPServer(hostname) {
-            if (confirm(`Remove connection to "${hostname}"?`)) {
-                fetch(`/remove?hostname=${encodeURIComponent(hostname)}`, {
-                    method: 'POST',
-                    headers: { 'Authorization': 'Bearer ' + getAccessToken() }
+        function removeMCPServer(mcpUrl) {
+            if (confirm(`Remove connection to "${mcpUrl}"?`)) {
+                fetch(`/mcp/remove?url=${encodeURIComponent(mcpUrl)}`, {
+                    method: 'POST'
                 })
                     .then(() => window.location.reload())
                     .catch(err => alert('Failed to remove server: ' + err.message));
             }
-        }
-
-        function getAccessToken() {
-            return '';
         }
 
         function showSuccess(message) {

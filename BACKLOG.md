@@ -6,3 +6,9 @@ https://uithub.com/vercel/ai/tree/main/packages/provider/src/language-model/v2?l
 https://ai-sdk.dev/docs/foundations/providers-and-models
 
 This could be a great integration.
+
+# Discoverability (`.well-known/mcp`)
+
+This is not something that's determined yet. For now this repo will focus on post-oauth initialization and getting details from there, rather over HTTP.
+
+https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization.md

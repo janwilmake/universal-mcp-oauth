@@ -3,6 +3,7 @@
     "@cloudflare/workers-types": "^4.20250809.0"
   },
   "dependencies": {
-    "mcp-client-server-registration": "^0.0.3"
+    "mcp-client-server-registration": "^0.0.3",
+    "universal-mcp-oauth": "^0.0.2"
   }
 }

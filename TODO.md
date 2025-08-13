@@ -1,7 +1,3 @@
-If you pass any URL, we need to use the MCP-standardized way of discovering oauth. If possible, direct user to signup/login with client. Credentials should be stored in central store. This in itself is super valuable and should be plugable into any website.
-
-https://universal.simplerauth.com
-
 # TODO
 
 - ✅ Exchange https://github.com/janwilmake/simplerauth-provider with https://github.com/janwilmake/x-oauth-client-provider
@@ -10,5 +6,10 @@ https://universal.simplerauth.com
 - ✅ Ensure removing the provider again works too
 - ✅ Researched and found the proper flow for mcp oauth (which can also be used for regular oauth!)
 - ✅ Improve this by adopting https://uithub.com/janwilmake/universal-mcp-oauth/tree/main/mcp-client-server-registration
-- Find a way to make `universal-mcp-oauth` very pluggable so people can make apps with this pattern more easily.
+- ✅ Find a way to make `universal-mcp-oauth` very pluggable so people can make apps with this pattern more easily.
+- Understand problems with current implementation (https://letmeprompt.com/httpsmodelcontext-o5keiu0)
+  - add token audience validation
+  - add refresh token rotation. figure out the best way to do this
+    - maybe adding a proxy (/mcp/proxy/{url}) that performs refresh if token is expired will be best?
+    - maybe just expose a function `refreshTokenIfNeeded(provider)` or even `stub.getFreshProviders(mcpUrls:string[]):Promise<MCPProvider[]>`
 - Create parallel recipe for MCP tasks ([parallel-tool-calling](../parallel-tool-calling/))
