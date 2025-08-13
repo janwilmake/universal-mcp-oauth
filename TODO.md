@@ -15,4 +15,3 @@
 - Test for many popular standalone servers that aren't hosted as part of a directory, see how good this implementation is. See what it supports and what it does NOT support.
 - Create parallel recipe for tasks that use MCPs ([parallel-tool-calling](../parallel-tool-calling/))
   - Will also need either Stripeflare or 'login with parallel'.
-- Moonshot: IDP-chat-completions!!!
