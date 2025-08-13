@@ -1,6 +1,10 @@
 > [!WARNING]
 > Work in Progress. Not fully spec-compliant yet!
 
+# What is this?
+
+This library lets your users login with any arbitrary MCP server trhough discovery, dynamic registration, authentication, authorization, and credential management.
+
 # Goals
 
 1. Specify required implementation for MCP-compatible Dynamic client registration that follows best practices of MCP [Authorization](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization#dynamic-client-registration) and [Security](https://modelcontextprotocol.io/specification/2025-06-18/basic/security_best_practices)
@@ -37,23 +41,22 @@ Discuss
 
 # Used Context
 
-Any implementation should leverage rfc8414 and rfc7591 to
+Any implementation should leverage rfc8414 and rfc7591 to:
 
 1. Find info about if and how to oauth
 2. Register a client to get a client_id (and maybe secret)
 
-Spec used:
+Specs:
 
 - `/.well-known/oauth-authorization-server`: https://www.rfc-editor.org/rfc/rfc8414.txt
+- `/.well-known/oauth-protected-resource`: https://www.rfc-editor.org/rfc/rfc9728.txt
 - `/register`: https://www.rfc-editor.org/rfc/rfc7591.txt
 - MCP: https://uithub.com/modelcontextprotocol/modelcontextprotocol/blob/main/schema/2025-06-18/schema.ts
-- Initialization request: https://letmeprompt.com/rules-httpsuithu-xupwz10?key=result
-
-Not used:
-
-- `/.well-known/oauth-protected-resource`: https://www.rfc-editor.org/rfc/rfc9728.txt
+- MCP Authorization https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization.md
+- MCP Security https://modelcontextprotocol.io/specification/2025-06-18/basic/security_best_practices.md
 
 Prompts:
 
 - HTML Client implementation: https://letmeprompt.com/rules-httpsuithu-6btu890
 - Cloudflare Worker implementation: https://letmeprompt.com/rules-httpsuithu-xtjor90
+- Initialization request: https://letmeprompt.com/rules-httpsuithu-xupwz10
