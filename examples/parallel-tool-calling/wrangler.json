@@ -1,6 +1,6 @@
 {
   "$schema": "https://unpkg.com/wrangler@latest/config-schema.json",
-  "name": "universal-mcp-oauth2",
+  "name": "parallel-tasks-mcp",
   "main": "worker.ts",
   "compatibility_date": "2025-08-08",
   "observability": { "logs": { "enabled": true } },
@@ -14,5 +14,7 @@
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["UserDO", "MCPProviders"] }
   ],
-  "routes": [{ "custom_domain": true, "pattern": "universal.simplerauth.com" }]
+  "routes": [
+    { "custom_domain": true, "pattern": "parallelmcptasks.gptideas.com" }
+  ]
 }

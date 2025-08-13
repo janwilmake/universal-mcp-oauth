@@ -4,32 +4,85 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Universal MCP OAuth - Enterprise MCP Server Authentication</title>
+    <title>Parallel Recipe #03 - Tasks with MCP tools</title>
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            line-height: 1.6;
+            transition: all 0.3s ease;
+        }
+
+        /* Light theme (default) */
+        :root {
+            --bg-color: #ffffff;
+            --bg-secondary: #f8f9fa;
+            --text-primary: #333333;
+            --text-secondary: #666666;
+            --text-tertiary: #888888;
+            --border-color: #e5e5e5;
+            --accent-color: #007bff;
+            --accent-hover: #0056b3;
+            --success-bg: #d4edda;
+            --success-border: #c3e6cb;
+            --success-text: #155724;
+            --card-bg: #ffffff;
+            --card-shadow: rgba(0, 0, 0, 0.1);
+        }
+
+        /* Dark theme */
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-color: #1a1a1a;
+                --bg-secondary: #2a2a2a;
+                --text-primary: #ffffff;
+                --text-secondary: #cccccc;
+                --text-tertiary: #888888;
+                --border-color: #333333;
+                --accent-color: #4a9eff;
+                --accent-hover: #3a8eef;
+                --success-bg: #1e3a2e;
+                --success-border: #2d5a45;
+                --success-text: #a3cfbb;
+                --card-bg: #2a2a2a;
+                --card-shadow: rgba(0, 0, 0, 0.3);
+            }
+        }
+
+        .container {
             max-width: 1000px;
             margin: 0 auto;
             padding: 20px;
-            line-height: 1.6;
-            background: #fafbfc;
-            color: #1f2328;
         }
 
         .header {
             text-align: center;
             margin-bottom: 40px;
             padding: 40px 0;
-            background: linear-gradient(135deg, #0969da 0%, #218bff 100%);
+            background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-hover) 100%);
             color: white;
             border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(9, 105, 218, 0.15);
+            margin-left: -20px;
+            margin-right: -20px;
         }
 
         .header h1 {
-            margin: 0 0 10px 0;
+            font-family: Impact, 'Arial Black', sans-serif;
             font-size: 2.2em;
-            font-weight: 600;
+            font-weight: bold;
+            margin: 0 0 10px 0;
+            text-transform: lowercase;
+        }
+
+        .header .brand {
+            font-weight: bold;
         }
 
         .header p {
@@ -49,32 +102,32 @@
             display: inline-flex;
             align-items: center;
             padding: 12px 24px;
-            background: white;
-            color: #0969da;
+            background: var(--card-bg);
+            color: var(--accent-color);
             text-decoration: none;
-            border: 2px solid #d1d9e0;
+            border: 2px solid var(--border-color);
             border-radius: 8px;
             font-weight: 500;
             transition: all 0.2s;
-            box-shadow: 0 1px 3px rgba(16, 22, 26, 0.1);
+            box-shadow: 0 2px 4px var(--card-shadow);
         }
 
         .nav a:hover {
-            background: #f6f8fa;
-            border-color: #0969da;
+            background: var(--bg-secondary);
+            border-color: var(--accent-color);
             transform: translateY(-1px);
-            box-shadow: 0 4px 8px rgba(16, 22, 26, 0.15);
+            box-shadow: 0 4px 8px var(--card-shadow);
         }
 
         .nav a.primary {
-            background: #0969da;
+            background: var(--accent-color);
             color: white;
-            border-color: #0969da;
+            border-color: var(--accent-color);
         }
 
         .nav a.primary:hover {
-            background: #0550ae;
-            border-color: #0550ae;
+            background: var(--accent-hover);
+            border-color: var(--accent-hover);
         }
 
         .form-group {
@@ -84,8 +137,8 @@
         .form-group label {
             display: block;
             margin-bottom: 8px;
-            font-weight: 500;
-            color: #1f2328;
+            font-weight: 600;
+            color: var(--text-primary);
         }
 
         input,
@@ -93,44 +146,71 @@
             width: 100%;
             padding: 14px 16px;
             margin: 8px 0;
-            border: 2px solid #d1d9e0;
+            border: 2px solid var(--border-color);
             border-radius: 8px;
             font-size: 16px;
-            transition: border-color 0.2s;
+            transition: all 0.2s;
+            background: var(--card-bg);
+            color: var(--text-primary);
         }
 
         input:focus {
             outline: none;
-            border-color: #0969da;
-            box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.1);
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(74, 158, 255, 0.1);
         }
 
         button {
-            background: #0969da;
+            background: var(--accent-color);
             color: white;
-            border: 2px solid #0969da;
+            border: 2px solid var(--accent-color);
             cursor: pointer;
             font-weight: 500;
         }
 
         button:hover {
-            background: #0550ae;
-            border-color: #0550ae;
+            background: var(--accent-hover);
+            border-color: var(--accent-hover);
+        }
+
+        button.secondary {
+            background: transparent;
+            color: var(--accent-color);
+            border: 2px solid var(--accent-color);
+        }
+
+        button.secondary:hover {
+            background: var(--accent-color);
+            color: white;
+        }
+
+        button.danger {
+            background: #dc3545;
+            border-color: #dc3545;
+            width: auto;
+            padding: 8px 16px;
+            margin-top: 10px;
+        }
+
+        button.danger:hover {
+            background: #c82333;
+            border-color: #c82333;
         }
 
         .provider {
-            border: 2px solid #d1d9e0;
+            border: 2px solid var(--border-color);
             padding: 20px;
             margin: 15px 0;
             border-radius: 10px;
-            background: white;
-            box-shadow: 0 2px 8px rgba(16, 22, 26, 0.1);
+            background: var(--card-bg);
+            box-shadow: 0 2px 8px var(--card-shadow);
         }
 
         .provider h4 {
             margin: 0 0 12px 0;
-            color: #0969da;
+            color: var(--accent-color);
             font-size: 1.2em;
+            font-weight: 600;
             display: flex;
             align-items: center;
             gap: 8px;
@@ -138,7 +218,7 @@
 
         .provider p {
             margin: 6px 0;
-            color: #656d76;
+            color: var(--text-secondary);
             font-size: 14px;
         }
 
@@ -146,14 +226,15 @@
             display: flex;
             gap: 15px;
             margin: 10px 0;
+            flex-wrap: wrap;
         }
 
         .provider .meta span {
-            background: #f6f8fa;
+            background: var(--bg-secondary);
             padding: 4px 8px;
             border-radius: 4px;
             font-size: 12px;
-            color: #656d76;
+            color: var(--text-tertiary);
         }
 
         .curl-example {
@@ -169,9 +250,9 @@
         }
 
         .success {
-            color: #1a7f37;
-            background: #dafbe1;
-            border: 2px solid #1a7f37;
+            color: var(--success-text);
+            background: var(--success-bg);
+            border: 2px solid var(--success-border);
             padding: 16px;
             border-radius: 8px;
             margin: 20px 0;
@@ -189,7 +270,7 @@
         }
 
         .login-prompt a {
-            color: #0969da;
+            color: var(--accent-color);
             text-decoration: none;
             font-weight: 600;
         }
@@ -202,25 +283,103 @@
         }
 
         .stat {
-            background: white;
+            background: var(--card-bg);
             padding: 20px;
             border-radius: 10px;
             text-align: center;
-            border: 2px solid #d1d9e0;
-            box-shadow: 0 2px 8px rgba(16, 22, 26, 0.1);
+            border: 2px solid var(--border-color);
+            box-shadow: 0 2px 8px var(--card-shadow);
         }
 
         .stat-number {
             font-size: 2em;
             font-weight: bold;
-            color: #0969da;
+            color: var(--accent-color);
             display: block;
         }
 
         .empty-state {
             text-align: center;
             padding: 40px 20px;
-            color: #656d76;
+            color: var(--text-secondary);
+        }
+
+        .mcp-examples {
+            margin: 30px 0;
+        }
+
+        .mcp-examples h3 {
+            color: var(--text-primary);
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+
+        .mcp-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .mcp-card {
+            background: var(--card-bg);
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            padding: 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 2px 4px var(--card-shadow);
+        }
+
+        .mcp-card:hover {
+            border-color: var(--accent-color);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px var(--card-shadow);
+        }
+
+        .mcp-card h4 {
+            color: var(--accent-color);
+            margin: 0 0 8px 0;
+            font-size: 1.1em;
+            font-weight: 600;
+        }
+
+        .mcp-card p {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin: 4px 0;
+        }
+
+        .mcp-card .category {
+            background: var(--bg-secondary);
+            color: var(--text-tertiary);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            display: inline-block;
+            margin-top: 8px;
+        }
+
+        /* HUMAN/MACHINE toggle */
+        .mode-toggle {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: var(--card-bg);
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-decoration: none;
+            box-shadow: 0 4px 12px var(--card-shadow);
+            transition: all 0.2s;
+        }
+
+        .mode-toggle:hover {
+            border-color: var(--accent-color);
+            color: var(--accent-color);
         }
 
         @media (max-width: 768px) {
@@ -237,27 +396,40 @@
             .stats {
                 grid-template-columns: 1fr;
             }
+
+            .mcp-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .header {
+                margin-left: -20px;
+                margin-right: -20px;
+            }
         }
     </style>
 </head>
 
 <body>
-    <div class="header">
-        <h1>Universal MCP OAuth</h1>
-        <p>Enterprise-grade authentication for Model Context Protocol servers</p>
-    </div>
+    <div class="container">
+        <div class="header">
+            <h1><span class="brand">parallel</span> Recipe #03 - Tasks with MCP tools</h1>
+            <p>Authenticate with MCP servers and execute tasks with powerful toolcalling</p>
+        </div>
 
-    <div class="nav">
-        <a href="/directory" class="primary">Browse MCP Directory</a>
-        <a href="#add-server">Add Custom Server</a>
-    </div>
+        <div class="nav">
+            <a href="#examples" class="primary">Try MCP Examples</a>
+            <a href="#add-server">Add Custom Server</a>
+        </div>
 
-    <div id="content">
-        <div class="login-prompt">
-            <p>Please <a href="/authorize?redirect_to=/">authenticate with X (Twitter)</a>
-                to manage your MCP server connections and access enterprise features.</p>
+        <div id="content">
+            <div class="login-prompt">
+                <p>Please <a href="/authorize?redirect_to=/">authenticate with X (Twitter)</a>
+                    to manage your MCP server connections and access enterprise features.</p>
+            </div>
         </div>
     </div>
+
+    <a href="?mode=machine" class="mode-toggle">MACHINE</a>
 
     <script>
         const urlParams = new URLSearchParams(window.location.search);
@@ -269,6 +441,69 @@
                 showSuccess('Successfully connected to MCP server!');
             }
         }
+
+        const usefulMCPs = [
+            {
+                name: "Linear",
+                url: "https://mcp.linear.app/sse",
+                category: "Project Management",
+                description: "Create issues, manage projects, and track development progress"
+            },
+            {
+                name: "Notion",
+                url: "https://mcp.notion.com/sse",
+                category: "Productivity",
+                description: "Create pages, update databases, and manage knowledge bases"
+            },
+            {
+                name: "PayPal",
+                url: "https://mcp.paypal.com/sse",
+                category: "Payments",
+                description: "Process payments, check balances, and manage transactions"
+            },
+            {
+                name: "Square",
+                url: "https://mcp.squareup.com/sse",
+                category: "Payments",
+                description: "Handle point-of-sale transactions and inventory management"
+            },
+            {
+                name: "Webflow",
+                url: "https://mcp.webflow.com/sse",
+                category: "CMS",
+                description: "Create and manage websites, update content, and publish pages"
+            },
+            {
+                name: "Wix",
+                url: "https://mcp.wix.com/sse",
+                category: "CMS",
+                description: "Build websites, manage content, and customize designs"
+            },
+            {
+                name: "Cloudflare Workers",
+                url: "https://bindings.mcp.cloudflare.com/sse",
+                category: "Development",
+                description: "Deploy serverless functions and manage edge computing resources"
+            },
+            {
+                name: "Neon",
+                url: "https://mcp.neon.tech/sse",
+                category: "Database",
+                description: "Manage PostgreSQL databases, run queries, and handle data operations"
+            },
+            {
+                name: "Prisma Postgres",
+                url: "https://mcp.prisma.io/mcp",
+                category: "Database",
+                description: "Database schema management, queries, and ORM operations"
+            },
+            {
+                name: "Simplescraper",
+                url: "https://mcp.simplescraper.io/mcp",
+                category: "Data Extraction",
+                description: "Extract data from websites and automate web scraping tasks"
+            }
+        ];
 
         function renderUserContent() {
             const { user, providers, curlExample } = window.userData;
@@ -288,6 +523,20 @@
                 <div>
                     <p>Welcome back, <strong>${user.name}</strong> (@${user.username})</p>
                     
+                    <div class="mcp-examples" id="examples">
+                        <h3>🚀 Popular MCP Tools for Tasks</h3>
+                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Click any example below to quickly connect and start using these powerful tools in your tasks.</p>
+                        <div class="mcp-grid">
+                            ${usefulMCPs.map(mcp => `
+                                <div class="mcp-card" onclick="fillMCPUrl('${mcp.url}')">
+                                    <h4>${mcp.name}</h4>
+                                    <p>${mcp.description}</p>
+                                    <span class="category">${mcp.category}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    
                     <h2 id="add-server">Add Custom MCP Server</h2>
                     <div class="form-group">
                         <label for="mcpUrl">MCP Server URL</label>
@@ -303,7 +552,7 @@
                     <h2>Your Connected Servers</h2>
                     <div id="providers">
                         ${providers.length === 0 ?
-                    '<div class="empty-state"><p>No MCP servers connected yet.<br><a href="/directory">Browse our directory</a> or add a custom server above.</p></div>' :
+                    '<div class="empty-state"><p>No MCP servers connected yet.<br>Try one of the examples above or add a custom server.</p></div>' :
                     providers.map(provider => `
                                 <div class="provider">
                                     <h4>🔗 ${provider.name}</h4>
@@ -312,7 +561,7 @@
                                         <span>Connected: ${new Date(provider.created_at).toLocaleDateString()}</span>
                                         ${provider.expires_at ? `<span>Expires: ${new Date(provider.expires_at).toLocaleDateString()}</span>` : '<span>No expiration</span>'}
                                     </div>
-                                    <button onclick="removeMCPServer('${provider.mcp_url}')" style="background: #da3633; border-color: #da3633; width: auto; padding: 8px 16px; margin-top: 10px;">Remove Connection</button>
+                                    <button onclick="removeMCPServer('${provider.mcp_url}')" class="danger">Remove Connection</button>
                                 </div>
                             `).join('')
                 }
@@ -326,6 +575,21 @@
                     ` : ''}
                 </div>
             `;
+        }
+
+        function fillMCPUrl(url) {
+            const input = document.getElementById('mcpUrl');
+            if (input) {
+                input.value = url;
+                input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                input.focus();
+
+                // Add a subtle highlight effect
+                input.style.borderColor = 'var(--accent-color)';
+                setTimeout(() => {
+                    input.style.borderColor = '';
+                }, 2000);
+            }
         }
 
         function addMCPServer() {
