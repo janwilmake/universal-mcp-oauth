@@ -363,11 +363,6 @@
             successDiv.className = 'success';
             successDiv.textContent = message;
             document.body.insertBefore(successDiv, document.body.firstChild);
-
-            setTimeout(() => {
-                successDiv.remove();
-                window.history.replaceState({}, '', window.location.pathname);
-            }, 3000);
         }
     </script>
 </body>

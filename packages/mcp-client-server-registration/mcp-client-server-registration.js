@@ -97,6 +97,8 @@ export async function constructMCPAuthorizationUrl(mcpUrl, callbackUrl) {
     if (initResponse.status === 200) {
       // No authentication required - MCP server is public
       noAuthRequired = true;
+      console.log("initialization result", await initResponse.text());
+
       return {
         mcpServerUrl: mcpUrl,
         noAuthRequired: true,
@@ -106,7 +108,7 @@ export async function constructMCPAuthorizationUrl(mcpUrl, callbackUrl) {
       // Extract resource metadata URL from WWW-Authenticate header
       const wwwAuth = initResponse.headers.get("WWW-Authenticate");
       if (wwwAuth) {
-        const match = wwwAuth.match(/resource="([^"]+)"/);
+        const match = wwwAuth.match(/resource_metadata="([^"]+)"/);
         if (match) {
           resourceMetadataUrl = match[1];
         }
@@ -118,42 +120,82 @@ export async function constructMCPAuthorizationUrl(mcpUrl, callbackUrl) {
     // Continue with fallback approach for auth discovery
   }
 
-  // Step 2: Get protected resource metadata
-  if (!resourceMetadataUrl) {
-    // Fallback: use MCP server hostname as base for .well-known discovery
-    const mcpUrlObj = new URL(mcpUrl);
-    resourceMetadataUrl = new URL(
-      "/.well-known/oauth-protected-resource",
-      `${mcpUrlObj.protocol}//${mcpUrlObj.host}`
-    ).toString();
+  // Step 2: Discover authorization servers
+  let authorizationServers = [];
+
+  // Try to get protected resource metadata first (if we have a resourceMetadataUrl)
+  if (resourceMetadataUrl) {
+    try {
+      const resourceResponse = await fetch(resourceMetadataUrl);
+      if (resourceResponse.ok) {
+        const resourceMetadata = await resourceResponse.json();
+        if (
+          resourceMetadata.authorization_servers &&
+          Array.isArray(resourceMetadata.authorization_servers) &&
+          resourceMetadata.authorization_servers.length > 0
+        ) {
+          authorizationServers = resourceMetadata.authorization_servers;
+        }
+      }
+    } catch (error) {
+      // Continue to fallback methods
+    }
   }
 
-  let resourceMetadata;
-  try {
-    const resourceResponse = await fetch(resourceMetadataUrl);
-    if (!resourceResponse.ok) {
-      throw new Error(
-        `Failed to fetch resource metadata: ${resourceResponse.status}`
-      );
+  // Fallback 1: Try .well-known/oauth-protected-resource on MCP server host
+  if (authorizationServers.length === 0) {
+    try {
+      const mcpUrlObj = new URL(mcpUrl);
+      const fallbackResourceUrl = new URL(
+        "/.well-known/oauth-protected-resource",
+        `${mcpUrlObj.protocol}//${mcpUrlObj.host}`
+      ).toString();
+
+      const resourceResponse = await fetch(fallbackResourceUrl);
+      if (resourceResponse.ok) {
+        const resourceMetadata = await resourceResponse.json();
+        if (
+          resourceMetadata.authorization_servers &&
+          Array.isArray(resourceMetadata.authorization_servers) &&
+          resourceMetadata.authorization_servers.length > 0
+        ) {
+          authorizationServers = resourceMetadata.authorization_servers;
+        }
+      }
+    } catch (error) {
+      // Continue to next fallback
     }
-    resourceMetadata = await resourceResponse.json();
-  } catch (error) {
+  }
+
+  // Fallback 2: Assume authorization server is on same host as MCP server
+  if (authorizationServers.length === 0) {
+    const mcpUrlObj = new URL(mcpUrl);
+    const assumedAuthServer = `${mcpUrlObj.protocol}//${mcpUrlObj.host}`;
+    authorizationServers = [assumedAuthServer];
+  }
+
+  // Step 3: Try each authorization server until we find one that works
+  let authMetadata, selectedAuthServer;
+  const discoveryErrors = [];
+
+  for (const authServerUrl of authorizationServers) {
+    try {
+      authMetadata = await discoverAuthServerMetadata(authServerUrl);
+      selectedAuthServer = authServerUrl;
+      break;
+    } catch (error) {
+      discoveryErrors.push(`${authServerUrl}: ${error.message}`);
+      continue;
+    }
+  }
+
+  if (!authMetadata || !selectedAuthServer) {
     throw new Error(
-      `Could not discover protected resource metadata: ${error.message}`
+      `Could not discover authorization server metadata. Tried: ${discoveryErrors.join(
+        ", "
+      )}`
     );
   }
-
-  if (
-    !resourceMetadata.authorization_servers ||
-    !Array.isArray(resourceMetadata.authorization_servers) ||
-    resourceMetadata.authorization_servers.length === 0
-  ) {
-    throw new Error("No authorization servers found in resource metadata");
-  }
-
-  // Step 3: Select first authorization server and discover metadata
-  const authServerUrl = resourceMetadata.authorization_servers[0];
-  const authMetadata = await discoverAuthServerMetadata(authServerUrl);
 
   // Step 4: Verify PKCE support (mandatory)
   if (
@@ -253,21 +295,33 @@ async function discoverAuthServerMetadata(issuerUrl) {
   const endpoints = [
     `/.well-known/oauth-authorization-server${basePath}`,
     `/.well-known/openid-configuration${basePath}`,
+    `/.well-known/oauth-authorization-server`, // Fallback without basePath
+    `/.well-known/openid-configuration`, // Fallback without basePath
   ];
+
+  const discoveryErrors = [];
 
   for (const endpoint of endpoints) {
     try {
       const metadataUrl = new URL(endpoint, url.origin);
       const response = await fetch(metadataUrl);
       if (response.ok) {
-        return await response.json();
+        const metadata = await response.json();
+        // Basic validation of required fields
+        if (metadata.authorization_endpoint && metadata.token_endpoint) {
+          return metadata;
+        }
       }
+      discoveryErrors.push(`${endpoint}: ${response.status}`);
     } catch (error) {
+      discoveryErrors.push(`${endpoint}: ${error.message}`);
       continue;
     }
   }
 
   throw new Error(
-    `Could not discover authorization server metadata for ${issuerUrl}`
+    `Could not discover authorization server metadata for ${issuerUrl}. Tried: ${discoveryErrors.join(
+      ", "
+    )}`
   );
 }

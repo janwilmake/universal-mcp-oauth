@@ -6,7 +6,7 @@ Based on the MCP authorization specification, here are the steps for a client to
 
 1. Make an MCP request to the server without a token
 2. Server responds with `HTTP 401 Unauthorized` containing `WWW-Authenticate` header
-3. Extract the resource metadata URL from the `WWW-Authenticate` header
+3. Extract the `resource_metadata` URL from the `WWW-Authenticate` header
 
 ### 2. Get Protected Resource Metadata
 
@@ -16,6 +16,8 @@ Based on the MCP authorization specification, here are the steps for a client to
    ```
 2. Parse the response to extract `authorization_servers` array
 3. Select an authorization server from the list
+
+Fallback: if not available, assume authorization server is on same host
 
 ### 3. Authorization Server Metadata Discovery
 

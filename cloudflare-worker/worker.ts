@@ -3,8 +3,10 @@
 //@ts-check
 
 import { DurableObject } from "cloudflare:workers";
-import { constructMCPAuthorizationUrl } from "./mcp-client-server-registration.js";
+import { constructMCPAuthorizationUrl } from "mcp-client-server-registration";
+//@ts-ignore
 import homepage from "./homepage.html";
+//@ts-ignore
 import directory from "./directory-template.html";
 //@ts-ignore
 import sampleData from "./sample.json";
@@ -22,6 +24,7 @@ export interface Env {
 type Provider = {
   id: string;
   hostname: string;
+  name: string;
   mcp_url: string;
   client_id?: string;
   client_secret?: string;
@@ -30,7 +33,7 @@ type Provider = {
   expires_at?: number;
   created_at: string;
   updated_at: string;
-  public?: boolean;
+  public?: 0 | 1;
 };
 
 export default {
@@ -71,7 +74,33 @@ export default {
       if (!user) {
         return new Response("Unauthorized", { status: 401 });
       }
-      return handleMCPCallback(request, user, env);
+      const hostname = url.pathname.split("/callback/")[1];
+
+      // Get auth flow data from cookie
+      const cookieName = `mcp_auth_${hostname}`;
+      const cookieHeader = request.headers.get("Cookie");
+      let authFlowData;
+
+      if (cookieHeader) {
+        const cookies = Object.fromEntries(
+          cookieHeader.split("; ").map((c) => c.split("="))
+        );
+        if (cookies[cookieName]) {
+          try {
+            authFlowData = JSON.parse(
+              atob(decodeURIComponent(cookies[cookieName]))
+            );
+          } catch (error) {
+            return new Response("Invalid auth flow data", { status: 400 });
+          }
+        }
+      }
+
+      if (!authFlowData) {
+        return new Response("Missing auth flow data", { status: 400 });
+      }
+
+      return handleMCPCallback(request, user, env, authFlowData);
     }
 
     return new Response("Not found", { status: 404 });
@@ -96,15 +125,15 @@ async function handleDirectory() {
 
 async function handleRemoveProvider(request: Request, user: any, env: Env) {
   const url = new URL(request.url);
-  const hostname = url.searchParams.get("hostname");
+  const mcpUrl = url.searchParams.get("mcp_url");
 
-  if (!hostname) {
-    return new Response("Missing hostname parameter", { status: 400 });
+  if (!mcpUrl) {
+    return new Response("Missing mcp_url parameter", { status: 400 });
   }
 
   try {
     const mcpProviders = getMcpStub(env, user.x_user_id);
-    await mcpProviders.removeProvider(hostname);
+    await mcpProviders.removeProvider(mcpUrl);
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { "Content-Type": "application/json" },
@@ -130,8 +159,9 @@ export class MCPProviders extends DurableObject<Env> {
     this.sql.exec(`
       CREATE TABLE IF NOT EXISTS providers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        hostname TEXT NOT NULL UNIQUE,
-        mcp_url TEXT NOT NULL,
+        hostname TEXT NOT NULL,
+        name TEXT NOT NULL,
+        mcp_url TEXT NOT NULL UNIQUE,
         client_id TEXT,
         client_secret TEXT,
         access_token TEXT,
@@ -146,6 +176,7 @@ export class MCPProviders extends DurableObject<Env> {
 
   async addProvider(
     hostname: string,
+    name: string,
     mcpUrl: string,
     clientId?: string,
     clientSecret?: string,
@@ -158,10 +189,11 @@ export class MCPProviders extends DurableObject<Env> {
     this.sql.exec(
       `
       INSERT OR REPLACE INTO providers 
-      (hostname, mcp_url, client_id, client_secret, access_token, expires_at, updated_at, public)
-      VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+      (hostname, name, mcp_url, client_id, client_secret, access_token, expires_at, updated_at, public)
+      VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
     `,
       hostname,
+      name,
       mcpUrl,
       clientId || null,
       clientSecret || null,
@@ -171,9 +203,9 @@ export class MCPProviders extends DurableObject<Env> {
     );
   }
 
-  async getProvider(hostname: string) {
+  async getProvider(mcpUrl: string) {
     const result = this.sql
-      .exec(`SELECT * FROM providers WHERE hostname = ? LIMIT 1`, hostname)
+      .exec(`SELECT * FROM providers WHERE mcp_url = ? LIMIT 1`, mcpUrl)
       .toArray()[0];
 
     return result || null;
@@ -185,8 +217,8 @@ export class MCPProviders extends DurableObject<Env> {
       .toArray();
   }
 
-  async removeProvider(hostname: string) {
-    this.sql.exec(`DELETE FROM providers WHERE hostname = ?`, hostname);
+  async removeProvider(mcpUrl: string) {
+    this.sql.exec(`DELETE FROM providers WHERE mcp_url = ?`, mcpUrl);
   }
 }
 
@@ -218,6 +250,82 @@ async function handleLandingPage(user: any, env: Env, origin: string) {
   });
 }
 
+async function extractMCPServerName(
+  mcpUrl: string,
+  accessToken?: string
+): Promise<string> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "application/json,text/event-stream",
+  };
+
+  if (accessToken) {
+    headers.Authorization = `Bearer ${accessToken}`;
+  }
+
+  const response = await fetch(mcpUrl, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-06-18",
+        capabilities: {
+          roots: {
+            listChanged: true,
+          },
+          sampling: {},
+        },
+        clientInfo: {
+          name: "mcp-auth-client",
+          title: "MCP Authorization Client",
+          version: "1.0.0",
+        },
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`MCP server request failed: ${response.status}`);
+  }
+
+  const contentType = response.headers.get("content-type") || "";
+
+  if (contentType.includes("text/event-stream")) {
+    // Handle SSE response
+    const text = await response.text();
+    const lines = text.split("\n");
+
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].startsWith("event: message")) {
+        // Next line should be data:
+        if (i + 1 < lines.length && lines[i + 1].startsWith("data: ")) {
+          const dataLine = lines[i + 1];
+          const jsonStr = dataLine.substring(6); // Remove "data: "
+          try {
+            const data = JSON.parse(jsonStr);
+            if (data.result?.serverInfo?.name) {
+              return data.result.serverInfo.name;
+            }
+          } catch (e) {
+            // Continue looking for other message events
+          }
+        }
+      }
+    }
+    throw new Error("Could not extract server name from SSE response");
+  } else {
+    // Handle JSON response
+    const data = await response.json();
+    if (data.result?.serverInfo?.name) {
+      return data.result.serverInfo.name;
+    }
+    throw new Error("Could not extract server name from JSON response");
+  }
+}
+
 async function handleMCPLogin(
   request: Request,
   user: any,
@@ -236,37 +344,45 @@ async function handleMCPLogin(
     const hostname = mcpUrlObj.hostname;
     const callbackUrl = `${origin}/callback/${hostname}`;
 
-    const authFlowData = await constructMCPAuthorizationUrl(
-      mcpUrl,
-      callbackUrl
-    );
+    const { registrationResponse, authServerMetadata, ...authFlowData } =
+      await constructMCPAuthorizationUrl(mcpUrl, callbackUrl);
 
     // If no auth is required, add the provider immediately
     if (authFlowData.noAuthRequired) {
-      const mcpProviders = getMcpStub(env, user.x_user_id);
-      await mcpProviders.addProvider(
-        hostname,
-        mcpUrl,
-        undefined, // no client_id for public servers
-        undefined, // no client_secret for public servers
-        undefined, // no access_token for public servers
-        undefined, // no expiration
-        true // mark as public
-      );
+      try {
+        const serverName = await extractMCPServerName(mcpUrl);
+        const mcpProviders = getMcpStub(env, user.x_user_id);
+        await mcpProviders.addProvider(
+          hostname,
+          serverName,
+          mcpUrl,
+          undefined, // no client_id for public servers
+          undefined, // no client_secret for public servers
+          undefined, // no access_token for public servers
+          undefined, // no expiration
+          true // mark as public
+        );
 
-      return new Response(null, {
-        status: 302,
-        headers: { Location: "/?success=1&public=1" },
-      });
+        return new Response(null, {
+          status: 302,
+          headers: { Location: "/?success=1" },
+        });
+      } catch (error) {
+        return new Response(`Failed to get server info: ${error.message}`, {
+          status: 400,
+        });
+      }
     }
 
     // Store auth flow data in cookie for callback
-    const authFlowCookie = btoa(
-      JSON.stringify({
-        ...authFlowData,
-        userId: user.x_user_id,
-        hostname: hostname,
-      })
+    const authFlowCookie = encodeURIComponent(
+      btoa(
+        JSON.stringify({
+          ...authFlowData,
+          userId: user.x_user_id,
+          hostname: hostname,
+        })
+      )
     );
 
     return new Response(null, {
@@ -283,7 +399,12 @@ async function handleMCPLogin(
   }
 }
 
-async function handleMCPCallback(request: Request, user: any, env: Env) {
+async function handleMCPCallback(
+  request: Request,
+  user: any,
+  env: Env,
+  authFlowData: any
+) {
   const url = new URL(request.url);
   const hostname = url.pathname.split("/callback/")[1];
   const code = url.searchParams.get("code");
@@ -291,29 +412,6 @@ async function handleMCPCallback(request: Request, user: any, env: Env) {
 
   if (!code || !stateParam) {
     return new Response("Missing code or state", { status: 400 });
-  }
-
-  // Get auth flow data from cookie
-  const cookieName = `mcp_auth_${hostname}`;
-  const cookieHeader = request.headers.get("Cookie");
-  let authFlowData;
-
-  if (cookieHeader) {
-    const cookies = Object.fromEntries(
-      cookieHeader.split("; ").map((c) => c.split("="))
-    );
-
-    if (cookies[cookieName]) {
-      try {
-        authFlowData = JSON.parse(atob(cookies[cookieName]));
-      } catch (error) {
-        return new Response("Invalid auth flow data", { status: 400 });
-      }
-    }
-  }
-
-  if (!authFlowData) {
-    return new Response("Missing auth flow data", { status: 400 });
   }
 
   // Verify state matches
@@ -369,33 +467,47 @@ async function handleMCPCallback(request: Request, user: any, env: Env) {
       );
     }
 
-    const tokenData = await tokenResponse.json();
+    const tokenData: { access_token: string; expires_in: number } =
+      await tokenResponse.json();
 
     if (!tokenData.access_token) {
       return new Response("No access token received", { status: 400 });
     }
 
-    // Store provider credentials
-    const mcpProviders = getMcpStub(env, user.x_user_id);
+    // Now test the MCP connection with the access token and get server name
+    try {
+      const serverName = await extractMCPServerName(
+        authFlowData.mcpServerUrl,
+        tokenData.access_token
+      );
 
-    await mcpProviders.addProvider(
-      hostname,
-      authFlowData.mcpServerUrl,
-      authFlowData.clientId,
-      authFlowData.clientSecret,
-      tokenData.access_token,
-      tokenData.expires_in,
-      false // not a public server
-    );
+      // Store provider credentials
+      const mcpProviders = getMcpStub(env, user.x_user_id);
 
-    // Redirect to landing page with success
-    return new Response(null, {
-      status: 302,
-      headers: {
-        Location: "/?success=1",
-        "Set-Cookie": `${cookieName}=; HttpOnly; Secure; SameSite=Lax; Max-Age=0; Path=/`, // Clear auth cookie
-      },
-    });
+      await mcpProviders.addProvider(
+        hostname,
+        serverName,
+        authFlowData.mcpServerUrl,
+        authFlowData.clientId,
+        authFlowData.clientSecret,
+        tokenData.access_token,
+        tokenData.expires_in,
+        false // not a public server
+      );
+
+      // Redirect to landing page with success
+      return new Response(null, {
+        status: 302,
+        headers: {
+          Location: "/?success=1",
+          "Set-Cookie": `mcp_auth_${hostname}=; HttpOnly; Secure; SameSite=Lax; Max-Age=0; Path=/`,
+        },
+      });
+    } catch (error) {
+      return new Response(`Failed to connect to MCP server: ${error.message}`, {
+        status: 400,
+      });
+    }
   } catch (error) {
     return new Response(`Token exchange failed: ${error.message}`, {
       status: 400,
@@ -404,7 +516,7 @@ async function handleMCPCallback(request: Request, user: any, env: Env) {
 }
 
 const getMcpStub = (env: Env, userId: string) => {
-  return env.MCPProviders.get(env.MCPProviders.idFromName("v2" + userId));
+  return env.MCPProviders.get(env.MCPProviders.idFromName("v4:" + userId));
 };
 
 function generateCurlExample(providers: Provider[]) {
@@ -412,7 +524,7 @@ function generateCurlExample(providers: Provider[]) {
     const server = {
       type: "url",
       url: provider.mcp_url,
-      name: provider.hostname,
+      name: provider.name, // Use the server name instead of hostname
     };
 
     // Only add headers if provider has access token (not public)
@@ -430,7 +542,7 @@ function generateCurlExample(providers: Provider[]) {
   const tools = providers.map((provider) => {
     const tool = {
       type: "mcp",
-      server_label: provider.hostname,
+      server_label: provider.name, // Use the server name instead of hostname
       server_url: provider.mcp_url,
       require_approval: "never",
     };
