@@ -23,10 +23,9 @@ Examples
 - [Cloudflare Worker](examples/cloudflare-worker/)
 - [Parallel Tool Calling with MCP (coming soon)](examples/parallel-tool-calling/)
 
-Dependencies
+Dependencies to examples
 
 - [x-oauth-client-provider](https://github.com/janwilmake/x-oauth-client-provider)
-- Cloudflare Durable Objects
 
 Discuss
 
