@@ -97,14 +97,20 @@ export class MCPProviders extends DurableObject {
 }
 
 export interface MCPOAuthConfig {
+  /** Stable UserID to which the authenticated connections with MCP servers need to be saved to */
   userId: string;
+  clientInfo: {
+    name: string;
+    title: string;
+    version: string;
+  };
   baseUrl?: string; // For custom callback URLs
 }
 
 const VERSION = "v4:";
 
 export function createMCPOAuthHandler(config: MCPOAuthConfig) {
-  const { userId, baseUrl } = config;
+  const { userId, baseUrl, clientInfo } = config;
 
   return async function handleMCPOAuth(
     request: Request,
@@ -123,12 +129,18 @@ export function createMCPOAuthHandler(config: MCPOAuthConfig) {
     const mcpProviders = getMcpStub(env, userId, VERSION);
 
     if (path === "/mcp/login") {
-      return handleMCPLogin(request, mcpProviders, origin);
+      return handleMCPLogin(request, mcpProviders, origin, clientInfo);
     }
 
     if (path.startsWith("/mcp/callback/")) {
       const hostname = path.split("/mcp/callback/")[1];
-      return handleMCPCallback(request, mcpProviders, hostname, origin);
+      return handleMCPCallback(
+        request,
+        mcpProviders,
+        hostname,
+        origin,
+        config.clientInfo
+      );
     }
 
     if (path === "/mcp/remove" && request.method === "POST") {
@@ -146,7 +158,12 @@ export function createMCPOAuthHandler(config: MCPOAuthConfig) {
 async function handleMCPLogin(
   request: Request,
   mcpProviders: DurableObjectStub<MCPProviders>,
-  origin: string
+  origin: string,
+  clientInfo: {
+    name: string;
+    title: string;
+    version: string;
+  }
 ) {
   const url = new URL(request.url);
   const mcpUrl = url.searchParams.get("url");
@@ -161,12 +178,12 @@ async function handleMCPLogin(
     const callbackUrl = `${origin}/mcp/callback/${hostname}`;
 
     const { registrationResponse, authServerMetadata, ...authFlowData } =
-      await constructMCPAuthorizationUrl(mcpUrl, callbackUrl);
+      await constructMCPAuthorizationUrl(mcpUrl, callbackUrl, clientInfo);
 
     // If no auth is required, add the provider immediately
     if (authFlowData.noAuthRequired) {
       try {
-        const serverName = await extractMCPServerName(mcpUrl);
+        const serverName = await extractMCPServerName(clientInfo, mcpUrl);
         await mcpProviders.addProvider(
           hostname,
           serverName,
@@ -217,7 +234,12 @@ async function handleMCPCallback(
   request: Request,
   mcpProviders: DurableObjectStub<MCPProviders>,
   hostname: string,
-  origin: string
+  origin: string,
+  clientInfo: {
+    name: string;
+    title: string;
+    version: string;
+  }
 ) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
@@ -276,6 +298,7 @@ async function handleMCPCallback(
 
     // Get server name and store provider
     const serverName = await extractMCPServerName(
+      clientInfo,
       authFlowData.mcpServerUrl,
       tokenData.access_token
     );
@@ -383,6 +406,11 @@ async function exchangeCodeForToken(
 }
 
 async function extractMCPServerName(
+  clientInfo: {
+    name: string;
+    title: string;
+    version: string;
+  },
   mcpUrl: string,
   accessToken?: string
 ): Promise<string> {
@@ -408,17 +436,17 @@ async function extractMCPServerName(
           roots: { listChanged: true },
           sampling: {},
         },
-        clientInfo: {
-          name: "mcp-auth-client",
-          title: "MCP Authorization Client",
-          version: "1.0.0",
-        },
+        clientInfo,
       },
     }),
   });
 
   if (!response.ok) {
-    throw new Error(`MCP server request failed: ${response.status}`);
+    throw new Error(
+      `MCP server request to ${mcpUrl} failed (access token: ${
+        accessToken || "None"
+      }): ${response.status} - ${await response.text()} `
+    );
   }
 
   const contentType = response.headers.get("content-type") || "";

@@ -44,6 +44,7 @@ function generateRandomState() {
  *
  * @param {string} mcpUrl - The URL of the MCP server to authorize against
  * @param {string} callbackUrl - The redirect URI for the OAuth2 callback
+ * @param {{name: string;title: string;version: string;}} clientInfo - client info
  * @returns {Promise<{
  *   authorizationUrl?: string,
  *   codeVerifier?: string,
@@ -59,7 +60,11 @@ function generateRandomState() {
  * }>} Authorization flow data needed for token exchange, or immediate access if no auth required
  * @throws {Error} When authorization server doesn't support required features or discovery fails
  */
-export async function constructMCPAuthorizationUrl(mcpUrl, callbackUrl) {
+export async function constructMCPAuthorizationUrl(
+  mcpUrl,
+  callbackUrl,
+  clientInfo
+) {
   // Step 1: Initial MCP request to check if auth is required
   let resourceMetadataUrl;
   let noAuthRequired = false;
@@ -85,11 +90,7 @@ export async function constructMCPAuthorizationUrl(mcpUrl, callbackUrl) {
             },
             sampling: {},
           },
-          clientInfo: {
-            name: "mcp-auth-client",
-            title: "MCP Authorization Client",
-            version: "1.0.0",
-          },
+          clientInfo,
         },
       }),
     });
@@ -218,15 +219,13 @@ export async function constructMCPAuthorizationUrl(mcpUrl, callbackUrl) {
         redirect_uris: [callbackUrl],
         grant_types: ["authorization_code"],
         response_types: ["code"],
-        client_name: "MCP Authorization Client",
+        client_name: clientInfo.name,
         application_type: "native",
       };
 
       const regResponse = await fetch(authMetadata.registration_endpoint, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(registrationRequest),
       });
 

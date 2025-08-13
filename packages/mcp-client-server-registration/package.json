@@ -1,6 +1,6 @@
 {
   "name": "mcp-client-server-registration",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "main": "mcp-client-server-registration.js",
   "files": [
     "mcp-client-server-registration.js"

@@ -7,11 +7,14 @@
 - ✅ Researched and found the proper flow for mcp oauth (which can also be used for regular oauth!)
 - ✅ Improve this by adopting https://uithub.com/janwilmake/universal-mcp-oauth/tree/main/mcp-client-server-registration
 - ✅ Find a way to make `universal-mcp-oauth` very pluggable so people can make apps with this pattern more easily.
+- ✅ Create parallel recipe for tasks that use MCPs ([parallel-tool-calling](../parallel-tool-calling/))
+- ✅ Test for examples, fix 404: `Token exchange failed: MCP server request failed: 404`. Update README about limitations
+- Test task creation with frontend polling
 - Understand problems with current implementation (https://letmeprompt.com/httpsmodelcontext-o5keiu0)
   - add token audience validation
   - add refresh token rotation. figure out the best way to do this
     - maybe adding a proxy (/mcp/proxy/{url}) that performs refresh if token is expired will be best?
     - maybe just expose a function `refreshTokenIfNeeded(provider)` or even `stub.getFreshProviders(mcpUrls:string[]):Promise<MCPProvider[]>`
-- Test for many popular standalone servers that aren't hosted as part of a directory, see how good this implementation is. See what it supports and what it does NOT support.
-- Create parallel recipe for tasks that use MCPs ([parallel-tool-calling](../parallel-tool-calling/))
-  - Will also need either Stripeflare or 'login with parallel'.
+- Add tool indexation to providers table
+- Allow user to set specificity when doing a task
+- Create Integration-friendly Task API with MCP IDP built-in

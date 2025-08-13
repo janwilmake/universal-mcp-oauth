@@ -422,67 +422,61 @@
         const urlParams = new URLSearchParams(window.location.search);
         const success = urlParams.get('success');
 
+
         const usefulMCPs = [
-            {
-                name: "Linear",
-                url: "https://mcp.linear.app/sse",
-                category: "Project Management",
-                description: "Create issues, manage projects, and track development progress"
-            },
-            {
-                name: "Notion",
-                url: "https://mcp.notion.com/sse",
-                category: "Productivity",
-                description: "Create pages, update databases, and manage knowledge bases"
-            },
-            {
-                name: "PayPal",
-                url: "https://mcp.paypal.com/sse",
-                category: "Payments",
-                description: "Process payments, check balances, and manage transactions"
-            },
-            {
-                name: "Square",
-                url: "https://mcp.squareup.com/sse",
-                category: "Payments",
-                description: "Handle point-of-sale transactions and inventory management"
-            },
-            {
-                name: "Webflow",
-                url: "https://mcp.webflow.com/sse",
-                category: "CMS",
-                description: "Create and manage websites, update content, and publish pages"
-            },
-            {
-                name: "Wix",
-                url: "https://mcp.wix.com/sse",
-                category: "CMS",
-                description: "Build websites, manage content, and customize designs"
-            },
-            {
-                name: "Cloudflare Workers",
-                url: "https://bindings.mcp.cloudflare.com/sse",
-                category: "Development",
-                description: "Deploy serverless functions and manage edge computing resources"
-            },
-            {
-                name: "Neon",
-                url: "https://mcp.neon.tech/sse",
-                category: "Database",
-                description: "Manage PostgreSQL databases, run queries, and handle data operations"
-            },
+
+            { name: "Linear", category: "Tasks", url: "https://mcp.linear.app/mcp", description: "Let the task see your linear" },
+
+            { name: "Notion", category: "Documents", url: "https://mcp.notion.com/mcp", description: "Get your notion stuff as part of your task" },
             {
                 name: "Prisma Postgres",
                 url: "https://mcp.prisma.io/mcp",
                 category: "Database",
                 description: "Database schema management, queries, and ORM operations"
             },
+
             {
-                name: "Simplescraper",
-                url: "https://mcp.simplescraper.io/mcp",
-                category: "Data Extraction",
-                description: "Extract data from websites and automate web scraping tasks"
-            }
+                name: "Context7 (on Smithery.ai)",
+                url: "https://server.smithery.ai/@upstash/context7-mcp/mcp",
+                description: "Find docs for libraries", category: "Coding"
+            },
+
+            {
+                name: "Hugging Face",
+                category: "AI/ML",
+                url: "https://hf.co/mcp",
+                auth: "Open",
+                description: "AI models, datasets, and machine learning tools"
+            },
+
+            {
+                name: "Find-A-Domain",
+                category: "Productivity",
+                url: "https://api.findadomain.dev/mcp",
+                auth: "Open",
+                description: "Domain name search and availability checking"
+            },
+            {
+                name: "Manifold",
+                category: "Forecasting",
+                url: "https://api.manifold.markets/v0/mcp",
+                auth: "Open",
+                description: "Prediction markets and forecasting platform"
+            },
+            {
+                name: "GitMCP",
+                category: "Software Development",
+                url: "https://gitmcp.io/docs",
+                auth: "Open",
+                description: "Git repository management and documentation"
+            },
+
+            {
+                name: "Exa", url: "https://mcp.exa.ai/mcp?exaApiKey=your-exa-api-key", description: "Vector Search", category: "Search"
+            },
+
+
+            { name: "Reddit (agentic.so)", url: "https://gateway.agentic.so/@agentic/reddit/mcp", description: "Get threads content on Reddit", category: "Context" }
         ];
         function fillMCPUrl(url) {
             const input = document.getElementById('mcpUrl');
@@ -691,7 +685,7 @@
                     
                     <h2 id="add-server">Add Custom MCP Server</h2>
                     <div class="form-group">
-                        <label for="mcpUrl">MCP Server URL</label>
+                        <label for="mcpUrl">MCP Server URL (Streamable HTTP Only and no custom headers!)</label>
                         <input 
                             type="url" 
                             id="mcpUrl" 

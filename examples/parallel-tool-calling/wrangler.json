@@ -14,7 +14,5 @@
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["UserDO", "MCPProviders"] }
   ],
-  "routes": [
-    { "custom_domain": true, "pattern": "parallelmcptasks.gptideas.com" }
-  ]
+  "routes": [{ "custom_domain": true, "pattern": "task.wilmake.com" }]
 }

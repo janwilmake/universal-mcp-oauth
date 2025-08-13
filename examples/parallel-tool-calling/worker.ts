@@ -54,6 +54,11 @@ export default {
       const mcpHandler = createMCPOAuthHandler({
         userId: ctx.user.id,
         baseUrl: url.origin,
+        clientInfo: {
+          name: "Parallel Tasks",
+          title: "Task Execution with MCPs",
+          version: "1.0.0",
+        },
       });
 
       const mcpResponse = await mcpHandler(request, env, ctx);
@@ -240,7 +245,7 @@ async function handleLandingPage(
       user,
       providers,
       hasApiKey: !!metadata.parallelApiKey,
-      curlExample: generateCurlExample(providers),
+      curlExample: generateCurlExample(providers, metadata.parallelApiKey),
     };
 
     // Inject data into HTML
@@ -255,7 +260,7 @@ async function handleLandingPage(
   });
 }
 
-function generateCurlExample(providers: MCPProvider[]) {
+function generateCurlExample(providers: MCPProvider[], apiKey: string) {
   const mcpServers = providers.map((provider) => {
     const server = {
       type: "url",
@@ -275,57 +280,18 @@ function generateCurlExample(providers: MCPProvider[]) {
     return server;
   });
 
-  const tools = providers.map((provider) => {
-    const tool = {
-      type: "mcp",
-      server_label: provider.name,
-      server_url: provider.mcp_url,
-      require_approval: "never",
-    };
-
-    // Only add headers if provider has access token (not public)
-    if (provider.access_token) {
-      tool.headers = {
-        Authorization: `${provider.token_type || "Bearer"} ${
-          provider.access_token
-        }`,
-      };
-    }
-
-    return tool;
-  });
-
   const stringify = (json: any) =>
     JSON.stringify(json, null, 6).replace(/\n/g, "\n    ");
 
-  return `curl https://api.anthropic.com/v1/messages \\
-  -H "Content-Type: application/json" \\
-  -H "X-API-Key: $ANTHROPIC_API_KEY" \\
-  -H "anthropic-version: 2023-06-01" \\
-  -H "anthropic-beta: mcp-client-2025-04-04" \\
-  -d '{
-    "model": "claude-sonnet-4-20250514",
-    "max_tokens": 1000,
-    "messages": [{"role": "user", "content": "What tools do you have available?"}],
-    "mcp_servers": ${stringify(mcpServers)}
-  }'
+  return `
   
 curl -X POST "https://api.parallel.ai/v1/tasks/runs" \\
-  -H "x-api-key: $PARALLEL_API_KEY" \\
+  -H "x-api-key: ${apiKey}" \\
   -H 'content-type: application/json' \\
   -H "parallel-beta: mcp-server-2025-07-17" \\
   --data '{
     "input": "What can you help me with?",
     "mcp_servers": ${stringify(mcpServers)}
   }'
-  
-curl https://api.openai.com/v1/responses \\
-  -H "Content-Type: application/json" \\
-  -H "Authorization: Bearer $OPENAI_API_KEY" \\
-  -d '{
-  "model": "gpt-5",
-  "tools": ${stringify(tools)},
-  "input": "What transport protocols are supported in the 2025-03-26 version of the MCP spec?"
-}'
 `;
 }
