@@ -62,6 +62,149 @@ export default {
       }
     }
 
+    // Handle API key endpoint
+    if (url.pathname === "/set-api-key" && request.method === "POST") {
+      if (!ctx.user) {
+        return new Response("Unauthorized", { status: 401 });
+      }
+
+      const body = (await request.json()) as { apiKey: string };
+      const metadata = (await ctx.getMetadata?.()) || {};
+      metadata.parallelApiKey = body.apiKey;
+      await ctx.setMetadata?.(metadata);
+
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // Handle task creation endpoint
+    if (url.pathname === "/task" && request.method === "POST") {
+      if (!ctx.user) {
+        return new Response("Unauthorized", { status: 401 });
+      }
+
+      const metadata = (await ctx.getMetadata?.()) || {};
+      const apiKey = metadata.parallelApiKey;
+
+      if (!apiKey) {
+        return new Response(JSON.stringify({ error: "No API key set" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      const body = (await request.json()) as {
+        mcpUrls: string[];
+        input: string;
+      };
+
+      // Get user's MCP providers
+      const allProviders = await getMCPProviders(env, ctx.user.id);
+      const requestedProviders = allProviders.filter((p) =>
+        body.mcpUrls.includes(p.mcp_url)
+      );
+
+      // Build MCP servers array for Parallel API
+      const mcpServers = requestedProviders.map((provider) => {
+        const server: any = {
+          type: "url",
+          url: provider.mcp_url,
+          name: provider.name,
+        };
+
+        // Only add headers if provider has access token (not public)
+        if (provider.access_token) {
+          server.headers = {
+            Authorization: `${provider.token_type || "Bearer"} ${
+              provider.access_token
+            }`,
+          };
+        }
+
+        return server;
+      });
+
+      // Call Parallel API
+      const parallelResponse = await fetch(
+        "https://api.parallel.ai/v1/tasks/runs",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": apiKey,
+            "parallel-beta": "mcp-server-2025-07-17",
+          },
+          body: JSON.stringify({
+            input: body.input,
+            processor: "base",
+            mcp_servers: mcpServers,
+          }),
+        }
+      );
+
+      if (!parallelResponse.ok) {
+        const error = await parallelResponse.text();
+        return new Response(
+          JSON.stringify({ error: `Parallel API error: ${error}` }),
+          {
+            status: parallelResponse.status,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      const result = await parallelResponse.json();
+
+      return new Response(null, {
+        status: 302,
+        headers: { Location: `/poll?id=${result.run_id}` },
+      });
+    }
+
+    // Handle polling endpoint
+    if (url.pathname === "/poll") {
+      if (!ctx.user) {
+        return new Response("Unauthorized", { status: 401 });
+      }
+
+      const runId = url.searchParams.get("id");
+      if (!runId) {
+        return new Response("Missing run ID", { status: 400 });
+      }
+
+      const metadata = (await ctx.getMetadata?.()) || {};
+      const apiKey = metadata.parallelApiKey;
+
+      if (!apiKey) {
+        return new Response("No API key set", { status: 400 });
+      }
+
+      // Call Parallel API to get result
+      const parallelResponse = await fetch(
+        `https://api.parallel.ai/v1/tasks/runs/${runId}/result?timeout=600`,
+        {
+          method: "GET",
+          headers: {
+            "x-api-key": apiKey,
+          },
+        }
+      );
+
+      if (!parallelResponse.ok) {
+        const error = await parallelResponse.text();
+        return new Response(`Parallel API error: ${error}`, {
+          status: parallelResponse.status,
+        });
+      }
+
+      const result = await parallelResponse.json();
+
+      return new Response(JSON.stringify(result, null, 2), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     // Redirect to login if no user for protected routes
     if (!ctx.user) {
       return new Response(null, {
@@ -73,7 +216,7 @@ export default {
     const { user } = ctx;
 
     if (url.pathname === "/") {
-      return handleLandingPage(user, env, url.origin);
+      return handleLandingPage(user, env, url.origin, ctx);
     }
 
     return new Response("Not found", { status: 404 });
@@ -83,17 +226,20 @@ export default {
 async function handleLandingPage(
   user: UserContext["user"],
   env: Env,
-  origin: string
+  origin: string,
+  ctx: UserContext
 ) {
   let html = homepage;
 
   if (user) {
     // Get user's MCP providers using the new package
     const providers = await getMCPProviders(env, user.id);
+    const metadata = (await ctx.getMetadata?.()) || {};
 
     const userData = {
       user,
       providers,
+      hasApiKey: !!metadata.parallelApiKey,
       curlExample: generateCurlExample(providers),
     };
 

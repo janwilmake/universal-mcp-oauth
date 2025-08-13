@@ -13,69 +13,30 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-primary);
-            line-height: 1.6;
-            transition: all 0.3s ease;
-        }
-
-        /* Light theme (default) */
-        :root {
-            --bg-color: #ffffff;
-            --bg-secondary: #f8f9fa;
-            --text-primary: #333333;
-            --text-secondary: #666666;
-            --text-tertiary: #888888;
-            --border-color: #e5e5e5;
-            --accent-color: #007bff;
-            --accent-hover: #0056b3;
-            --success-bg: #d4edda;
-            --success-border: #c3e6cb;
-            --success-text: #155724;
-            --card-bg: #ffffff;
-            --card-shadow: rgba(0, 0, 0, 0.1);
-        }
-
-        /* Dark theme */
-        @media (prefers-color-scheme: dark) {
-            :root {
-                --bg-color: #1a1a1a;
-                --bg-secondary: #2a2a2a;
-                --text-primary: #ffffff;
-                --text-secondary: #cccccc;
-                --text-tertiary: #888888;
-                --border-color: #333333;
-                --accent-color: #4a9eff;
-                --accent-hover: #3a8eef;
-                --success-bg: #1e3a2e;
-                --success-border: #2d5a45;
-                --success-text: #a3cfbb;
-                --card-bg: #2a2a2a;
-                --card-shadow: rgba(0, 0, 0, 0.3);
-            }
+            font-family: 'Courier New', monospace;
+            background-color: #1a1a1a;
+            color: #d0d0d0;
+            line-height: 1.5;
         }
 
         .container {
-            max-width: 1000px;
+            max-width: 900px;
             margin: 0 auto;
             padding: 20px;
         }
 
         .header {
             text-align: center;
-            margin-bottom: 40px;
-            padding: 40px 0;
-            background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-hover) 100%);
-            color: white;
-            border-radius: 12px;
-            margin-left: -20px;
-            margin-right: -20px;
+            margin-bottom: 30px;
+            padding: 30px 0;
+            background: #2a2a2a;
+            color: #f0f0f0;
+            border: 2px solid #404040;
         }
 
         .header h1 {
-            font-family: Impact, 'Arial Black', sans-serif;
-            font-size: 2.2em;
+            font-family: 'Courier New', monospace;
+            font-size: 1.8em;
             font-weight: bold;
             margin: 0 0 10px 0;
             text-transform: lowercase;
@@ -87,299 +48,329 @@
 
         .header p {
             margin: 0;
-            font-size: 1.1em;
-            opacity: 0.9;
+            font-size: 1em;
+            opacity: 0.8;
         }
 
         .nav {
             display: flex;
-            gap: 20px;
+            gap: 15px;
             justify-content: center;
-            margin: 30px 0;
+            margin: 25px 0;
+            flex-wrap: wrap;
         }
 
         .nav a {
             display: inline-flex;
             align-items: center;
-            padding: 12px 24px;
-            background: var(--card-bg);
-            color: var(--accent-color);
+            padding: 10px 20px;
+            background: #2a2a2a;
+            color: #d0d0d0;
             text-decoration: none;
-            border: 2px solid var(--border-color);
-            border-radius: 8px;
-            font-weight: 500;
+            border: 1px solid #404040;
+            font-weight: normal;
             transition: all 0.2s;
-            box-shadow: 0 2px 4px var(--card-shadow);
         }
 
         .nav a:hover {
-            background: var(--bg-secondary);
-            border-color: var(--accent-color);
-            transform: translateY(-1px);
-            box-shadow: 0 4px 8px var(--card-shadow);
+            background: #333333;
+            border-color: #555555;
         }
 
         .nav a.primary {
-            background: var(--accent-color);
-            color: white;
-            border-color: var(--accent-color);
+            background: #333333;
+            color: #f0f0f0;
+            border-color: #555555;
         }
 
         .nav a.primary:hover {
-            background: var(--accent-hover);
-            border-color: var(--accent-hover);
+            background: #404040;
+            border-color: #666666;
         }
 
         .form-group {
-            margin: 20px 0;
+            margin: 15px 0;
         }
 
         .form-group label {
             display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: var(--text-primary);
+            margin-bottom: 5px;
+            font-weight: normal;
+            color: #d0d0d0;
         }
 
         input,
-        button {
+        button,
+        textarea {
             width: 100%;
-            padding: 14px 16px;
-            margin: 8px 0;
-            border: 2px solid var(--border-color);
-            border-radius: 8px;
-            font-size: 16px;
-            transition: all 0.2s;
-            background: var(--card-bg);
-            color: var(--text-primary);
+            padding: 10px;
+            margin: 5px 0;
+            border: 1px solid #404040;
+            font-size: 14px;
+            background: #2a2a2a;
+            color: #d0d0d0;
+            font-family: 'Courier New', monospace;
         }
 
-        input:focus {
+        input:focus,
+        textarea:focus {
             outline: none;
-            border-color: var(--accent-color);
-            box-shadow: 0 0 0 3px rgba(74, 158, 255, 0.1);
+            border-color: #555555;
+            background: #333333;
         }
 
         button {
-            background: var(--accent-color);
-            color: white;
-            border: 2px solid var(--accent-color);
+            background: #333333;
+            color: #f0f0f0;
+            border: 1px solid #555555;
             cursor: pointer;
-            font-weight: 500;
         }
 
         button:hover {
-            background: var(--accent-hover);
-            border-color: var(--accent-hover);
+            background: #404040;
+            border-color: #666666;
         }
 
         button.secondary {
-            background: transparent;
-            color: var(--accent-color);
-            border: 2px solid var(--accent-color);
+            background: #2a2a2a;
+            color: #d0d0d0;
+            border: 1px solid #404040;
         }
 
         button.secondary:hover {
-            background: var(--accent-color);
-            color: white;
+            background: #333333;
+            color: #f0f0f0;
         }
 
         button.danger {
-            background: #dc3545;
-            border-color: #dc3545;
+            background: #442222;
+            border-color: #662222;
             width: auto;
-            padding: 8px 16px;
-            margin-top: 10px;
+            padding: 6px 12px;
+            margin-top: 8px;
         }
 
         button.danger:hover {
-            background: #c82333;
-            border-color: #c82333;
+            background: #553333;
+            border-color: #773333;
         }
 
         .provider {
-            border: 2px solid var(--border-color);
-            padding: 20px;
-            margin: 15px 0;
-            border-radius: 10px;
-            background: var(--card-bg);
-            box-shadow: 0 2px 8px var(--card-shadow);
+            border: 1px solid #404040;
+            padding: 15px;
+            margin: 10px 0;
+            background: #2a2a2a;
         }
 
         .provider h4 {
-            margin: 0 0 12px 0;
-            color: var(--accent-color);
-            font-size: 1.2em;
-            font-weight: 600;
+            margin: 0 0 8px 0;
+            color: #f0f0f0;
+            font-size: 1.1em;
+            font-weight: normal;
             display: flex;
             align-items: center;
             gap: 8px;
         }
 
         .provider p {
-            margin: 6px 0;
-            color: var(--text-secondary);
-            font-size: 14px;
+            margin: 4px 0;
+            color: #b0b0b0;
+            font-size: 13px;
         }
 
         .provider .meta {
             display: flex;
-            gap: 15px;
-            margin: 10px 0;
+            gap: 10px;
+            margin: 8px 0;
             flex-wrap: wrap;
         }
 
         .provider .meta span {
-            background: var(--bg-secondary);
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            color: var(--text-tertiary);
+            background: #333333;
+            padding: 2px 6px;
+            font-size: 11px;
+            color: #a0a0a0;
         }
 
         .curl-example {
-            background: #0d1117;
-            border: 1px solid #30363d;
-            border-radius: 8px;
-            padding: 20px;
-            margin: 25px 0;
-            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
-            font-size: 13px;
+            background: #000000;
+            border: 1px solid #333333;
+            padding: 15px;
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
             overflow-x: auto;
-            color: #f0f6fc;
+            color: #d0d0d0;
         }
 
         .success {
-            color: var(--success-text);
-            background: var(--success-bg);
-            border: 2px solid var(--success-border);
-            padding: 16px;
-            border-radius: 8px;
-            margin: 20px 0;
-            font-weight: 500;
+            color: #90c090;
+            background: #223322;
+            border: 1px solid #445544;
+            padding: 12px;
+            margin: 15px 0;
+        }
+
+        .error {
+            color: #c09090;
+            background: #332222;
+            border: 1px solid #554444;
+            padding: 12px;
+            margin: 15px 0;
         }
 
         .login-prompt {
-            background: linear-gradient(135deg, #fff3cd, #ffeaa7);
-            border: 2px solid #d4a02a;
-            color: #856404;
-            padding: 24px;
-            border-radius: 10px;
-            margin: 30px 0;
+            background: #2a2a1a;
+            border: 1px solid #4a4a2a;
+            color: #d0d090;
+            padding: 20px;
+            margin: 25px 0;
             text-align: center;
         }
 
         .login-prompt a {
-            color: var(--accent-color);
+            color: #f0f0a0;
             text-decoration: none;
-            font-weight: 600;
+            font-weight: normal;
         }
 
         .stats {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin: 30px 0;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            margin: 25px 0;
         }
 
         .stat {
-            background: var(--card-bg);
-            padding: 20px;
-            border-radius: 10px;
+            background: #2a2a2a;
+            padding: 15px;
             text-align: center;
-            border: 2px solid var(--border-color);
-            box-shadow: 0 2px 8px var(--card-shadow);
+            border: 1px solid #404040;
         }
 
         .stat-number {
-            font-size: 2em;
+            font-size: 1.5em;
             font-weight: bold;
-            color: var(--accent-color);
+            color: #f0f0f0;
             display: block;
         }
 
         .empty-state {
             text-align: center;
-            padding: 40px 20px;
-            color: var(--text-secondary);
+            padding: 30px 15px;
+            color: #909090;
         }
 
         .mcp-examples {
-            margin: 30px 0;
+            margin: 25px 0;
         }
 
         .mcp-examples h3 {
-            color: var(--text-primary);
-            margin-bottom: 20px;
-            font-weight: 600;
+            color: #f0f0f0;
+            margin-bottom: 15px;
+            font-weight: normal;
         }
 
         .mcp-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 15px;
-            margin: 20px 0;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 10px;
+            margin: 15px 0;
         }
 
         .mcp-card {
-            background: var(--card-bg);
-            border: 2px solid var(--border-color);
-            border-radius: 8px;
-            padding: 16px;
+            background: #2a2a2a;
+            border: 1px solid #404040;
+            padding: 12px;
             cursor: pointer;
             transition: all 0.2s;
-            box-shadow: 0 2px 4px var(--card-shadow);
         }
 
         .mcp-card:hover {
-            border-color: var(--accent-color);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px var(--card-shadow);
+            border-color: #555555;
+            background: #333333;
         }
 
         .mcp-card h4 {
-            color: var(--accent-color);
-            margin: 0 0 8px 0;
-            font-size: 1.1em;
-            font-weight: 600;
+            color: #f0f0f0;
+            margin: 0 0 6px 0;
+            font-size: 1em;
+            font-weight: normal;
         }
 
         .mcp-card p {
-            color: var(--text-secondary);
-            font-size: 14px;
-            margin: 4px 0;
+            color: #b0b0b0;
+            font-size: 12px;
+            margin: 3px 0;
         }
 
         .mcp-card .category {
-            background: var(--bg-secondary);
-            color: var(--text-tertiary);
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 12px;
+            background: #333333;
+            color: #a0a0a0;
+            padding: 1px 6px;
+            font-size: 10px;
             display: inline-block;
-            margin-top: 8px;
+            margin-top: 6px;
         }
 
-        /* HUMAN/MACHINE toggle */
+        .task-form {
+            background: #2a2a2a;
+            border: 1px solid #404040;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .task-form h3 {
+            margin: 0 0 15px 0;
+            color: #f0f0f0;
+            font-weight: normal;
+        }
+
+        .provider-selector {
+            margin: 10px 0;
+        }
+
+        .provider-selector label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 5px 0;
+            cursor: pointer;
+        }
+
+        .provider-selector input[type="checkbox"] {
+            width: auto;
+            margin: 0;
+        }
+
+        textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+
         .mode-toggle {
             position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: var(--card-bg);
-            border: 2px solid var(--border-color);
-            border-radius: 8px;
-            padding: 8px 12px;
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--text-secondary);
+            bottom: 15px;
+            right: 15px;
+            background: #2a2a2a;
+            border: 1px solid #404040;
+            padding: 6px 10px;
+            font-size: 11px;
+            color: #a0a0a0;
             text-decoration: none;
-            box-shadow: 0 4px 12px var(--card-shadow);
-            transition: all 0.2s;
+            font-family: 'Courier New', monospace;
         }
 
         .mode-toggle:hover {
-            border-color: var(--accent-color);
-            color: var(--accent-color);
+            border-color: #555555;
+            color: #d0d0d0;
+        }
+
+        .api-key-form {
+            background: #2a2a2a;
+            border: 1px solid #404040;
+            padding: 15px;
+            margin: 15px 0;
         }
 
         @media (max-width: 768px) {
@@ -389,7 +380,7 @@
             }
 
             .nav a {
-                width: 200px;
+                width: 180px;
                 text-align: center;
             }
 
@@ -399,11 +390,6 @@
 
             .mcp-grid {
                 grid-template-columns: 1fr;
-            }
-
-            .header {
-                margin-left: -20px;
-                margin-right: -20px;
             }
         }
     </style>
@@ -419,6 +405,7 @@
         <div class="nav">
             <a href="#examples" class="primary">Try MCP Examples</a>
             <a href="#add-server">Add Custom Server</a>
+            <a href="#task-runner">Run Tasks</a>
         </div>
 
         <div id="content">
@@ -434,6 +421,124 @@
     <script>
         const urlParams = new URLSearchParams(window.location.search);
         const success = urlParams.get('success');
+
+
+        function renderUserContent() {
+            const { user, providers, curlExample, hasApiKey } = window.userData;
+
+            document.getElementById('content').innerHTML = `
+                <div class="stats">
+                    <div class="stat">
+                        <span class="stat-number">${providers.length}</span>
+                        <span>Connected Servers</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-number">${user.verified ? '✓' : '○'}</span>
+                        <span>Verified Account</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-number">${hasApiKey ? '✓' : '○'}</span>
+                        <span>API Key Set</span>
+                    </div>
+                </div>
+                
+                <div>
+                    <p>Welcome back, <strong>${user.name}</strong> (@${user.username})</p>
+                    
+                    <div class="api-key-form">
+                        <h3>Parallel API Key</h3>
+                        <div class="form-group">
+                            <label for="apiKey">Your Parallel API Key</label>
+                            <input 
+                                type="password" 
+                                id="apiKey" 
+                                placeholder="Enter your Parallel API key"
+                                value="${hasApiKey ? '••••••••••••••••' : ''}"
+                            >
+                            <button onclick="setApiKey()">Update API Key</button>
+                        </div>
+                        <p style="font-size: 12px; color: #a0a0a0;">Get your API key from <a href="https://parallel.ai" style="color: #d0d090;">parallel.ai</a></p>
+                    </div>
+                    
+                    ${hasApiKey && providers.length > 0 ? `
+                        <div class="task-form" id="task-runner">
+                            <h3>Execute Task with MCP Tools</h3>
+                            <div class="form-group">
+                                <label>Select MCP Servers to use:</label>
+                                <div class="provider-selector">
+                                    ${providers.map(provider => `
+                                        <label>
+                                            <input type="checkbox" value="${provider.mcp_url}" data-name="${provider.name}">
+                                            ${provider.name} (${provider.mcp_url})
+                                        </label>
+                                    `).join('')}
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="taskInput">Task Input</label>
+                                <textarea 
+                                    id="taskInput" 
+                                    placeholder="What would you like to do with these MCP tools?"
+                                ></textarea>
+                            </div>
+                            <button onclick="runTask()">Execute Task</button>
+                        </div>
+                    ` : ''}
+                    
+                    <div class="mcp-examples" id="examples">
+                        <h3>🚀 Popular MCP Tools for Tasks</h3>
+                        <p style="color: #b0b0b0; margin-bottom: 15px;">Click any example below to quickly connect and start using these powerful tools in your tasks.</p>
+                        <div class="mcp-grid">
+                            ${usefulMCPs.map(mcp => `
+                                <div class="mcp-card" onclick="fillMCPUrl('${mcp.url}')">
+                                    <h4>${mcp.name}</h4>
+                                    <p>${mcp.description}</p>
+                                    <span class="category">${mcp.category}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    
+                    <h2 id="add-server">Add Custom MCP Server</h2>
+                    <div class="form-group">
+                        <label for="mcpUrl">MCP Server URL</label>
+                        <input 
+                            type="url" 
+                            id="mcpUrl" 
+                            placeholder="https://your-mcp-server.com" 
+                            value=""
+                        >
+                        <button onclick="addMCPServer()">Connect MCP Server</button>
+                    </div>
+                    
+                    <h2>Your Connected Servers</h2>
+                    <div id="providers">
+                        ${providers.length === 0 ?
+                    '<div class="empty-state"><p>No MCP servers connected yet.<br>Try one of the examples above or add a custom server.</p></div>' :
+                    providers.map(provider => `
+                                <div class="provider">
+                                    <h4>🔗 ${provider.name}</h4>
+                                    <p><strong>URL:</strong> ${provider.mcp_url}</p>
+                                    <div class="meta">
+                                        <span>Connected: ${new Date(provider.created_at).toLocaleDateString()}</span>
+                                        ${provider.expires_at ? `<span>Expires: ${new Date(provider.expires_at).toLocaleDateString()}</span>` : '<span>No expiration</span>'}
+                                    </div>
+                                    <button onclick="removeMCPServer('${provider.mcp_url}')" class="danger">Remove Connection</button>
+                                </div>
+                            `).join('')
+                }
+                    </div>
+                    
+                    ${providers.length > 0 ? `
+                        <h2>Integration Examples</h2>
+                        <p>Use your connected MCP servers with these AI platforms:</p>
+                        <pre class="curl-example">${curlExample}</pre>
+                        <p><small>Replace <code>$ANTHROPIC_API_KEY</code>, <code>$PARALLEL_API_KEY</code>, and <code>$OPENAI_API_KEY</code> with your actual API keys.</small></p>
+                    ` : ''}
+                </div>
+            `;
+        }
+
 
         if (window.userData) {
             renderUserContent();
@@ -504,79 +609,6 @@
                 description: "Extract data from websites and automate web scraping tasks"
             }
         ];
-
-        function renderUserContent() {
-            const { user, providers, curlExample } = window.userData;
-
-            document.getElementById('content').innerHTML = `
-                <div class="stats">
-                    <div class="stat">
-                        <span class="stat-number">${providers.length}</span>
-                        <span>Connected Servers</span>
-                    </div>
-                    <div class="stat">
-                        <span class="stat-number">${user.verified ? '✓' : '○'}</span>
-                        <span>Verified Account</span>
-                    </div>
-                </div>
-                
-                <div>
-                    <p>Welcome back, <strong>${user.name}</strong> (@${user.username})</p>
-                    
-                    <div class="mcp-examples" id="examples">
-                        <h3>🚀 Popular MCP Tools for Tasks</h3>
-                        <p style="color: var(--text-secondary); margin-bottom: 20px;">Click any example below to quickly connect and start using these powerful tools in your tasks.</p>
-                        <div class="mcp-grid">
-                            ${usefulMCPs.map(mcp => `
-                                <div class="mcp-card" onclick="fillMCPUrl('${mcp.url}')">
-                                    <h4>${mcp.name}</h4>
-                                    <p>${mcp.description}</p>
-                                    <span class="category">${mcp.category}</span>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                    
-                    <h2 id="add-server">Add Custom MCP Server</h2>
-                    <div class="form-group">
-                        <label for="mcpUrl">MCP Server URL</label>
-                        <input 
-                            type="url" 
-                            id="mcpUrl" 
-                            placeholder="https://your-mcp-server.com" 
-                            value=""
-                        >
-                        <button onclick="addMCPServer()">Connect MCP Server</button>
-                    </div>
-                    
-                    <h2>Your Connected Servers</h2>
-                    <div id="providers">
-                        ${providers.length === 0 ?
-                    '<div class="empty-state"><p>No MCP servers connected yet.<br>Try one of the examples above or add a custom server.</p></div>' :
-                    providers.map(provider => `
-                                <div class="provider">
-                                    <h4>🔗 ${provider.name}</h4>
-                                    <p><strong>URL:</strong> ${provider.mcp_url}</p>
-                                    <div class="meta">
-                                        <span>Connected: ${new Date(provider.created_at).toLocaleDateString()}</span>
-                                        ${provider.expires_at ? `<span>Expires: ${new Date(provider.expires_at).toLocaleDateString()}</span>` : '<span>No expiration</span>'}
-                                    </div>
-                                    <button onclick="removeMCPServer('${provider.mcp_url}')" class="danger">Remove Connection</button>
-                                </div>
-                            `).join('')
-                }
-                    </div>
-                    
-                    ${providers.length > 0 ? `
-                        <h2>Integration Examples</h2>
-                        <p>Use your connected MCP servers with these AI platforms:</p>
-                        <pre class="curl-example">${curlExample}</pre>
-                        <p><small>Replace <code>$ANTHROPIC_API_KEY</code>, <code>$PARALLEL_API_KEY</code>, and <code>$OPENAI_API_KEY</code> with your actual API keys.</small></p>
-                    ` : ''}
-                </div>
-            `;
-        }
-
         function fillMCPUrl(url) {
             const input = document.getElementById('mcpUrl');
             if (input) {
@@ -585,7 +617,7 @@
                 input.focus();
 
                 // Add a subtle highlight effect
-                input.style.borderColor = 'var(--accent-color)';
+                input.style.borderColor = '#666666';
                 setTimeout(() => {
                     input.style.borderColor = '';
                 }, 2000);
@@ -595,7 +627,7 @@
         function addMCPServer() {
             const url = document.getElementById('mcpUrl').value.trim();
             if (!url) {
-                alert('Please enter a valid MCP server URL');
+                showError('Please enter a valid MCP server URL');
                 return;
             }
 
@@ -603,7 +635,7 @@
                 new URL(url);
                 window.location.href = `/mcp/login?url=${encodeURIComponent(url)}`;
             } catch (e) {
-                alert('Please enter a valid URL');
+                showError('Please enter a valid URL');
             }
         }
 
@@ -613,8 +645,81 @@
                     method: 'POST'
                 })
                     .then(() => window.location.reload())
-                    .catch(err => alert('Failed to remove server: ' + err.message));
+                    .catch(err => showError('Failed to remove server: ' + err.message));
             }
+        }
+
+        function setApiKey() {
+            const apiKey = document.getElementById('apiKey').value.trim();
+            if (!apiKey || apiKey === '••••••••••••••••') {
+                showError('Please enter a valid API key');
+                return;
+            }
+
+            fetch('/set-api-key', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ apiKey })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showSuccess('API key updated successfully!');
+                        setTimeout(() => window.location.reload(), 1500);
+                    } else {
+                        showError('Failed to update API key');
+                    }
+                })
+                .catch(err => showError('Failed to update API key: ' + err.message));
+        }
+
+        function runTask() {
+            const selectedCheckboxes = document.querySelectorAll('.provider-selector input[type="checkbox"]:checked');
+            const mcpUrls = Array.from(selectedCheckboxes).map(cb => cb.value);
+            const input = document.getElementById('taskInput').value.trim();
+
+            if (mcpUrls.length === 0) {
+                showError('Please select at least one MCP server');
+                return;
+            }
+
+            if (!input) {
+                showError('Please enter a task input');
+                return;
+            }
+
+            // Show loading state
+            const button = event.target;
+            const originalText = button.textContent;
+            button.textContent = 'Executing...';
+            button.disabled = true;
+
+            fetch('/task', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    mcpUrls,
+                    input
+                })
+            })
+                .then(response => {
+                    if (response.redirected) {
+                        window.location.href = response.url;
+                    } else if (!response.ok) {
+                        return response.json().then(err => {
+                            throw new Error(err.error || 'Unknown error');
+                        });
+                    }
+                })
+                .catch(err => {
+                    showError('Failed to execute task: ' + err.message);
+                    button.textContent = originalText;
+                    button.disabled = false;
+                });
         }
 
         function showSuccess(message) {
@@ -622,6 +727,15 @@
             successDiv.className = 'success';
             successDiv.textContent = message;
             document.body.insertBefore(successDiv, document.body.firstChild);
+            setTimeout(() => successDiv.remove(), 5000);
+        }
+
+        function showError(message) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error';
+            errorDiv.textContent = message;
+            document.body.insertBefore(errorDiv, document.body.firstChild);
+            setTimeout(() => errorDiv.remove(), 5000);
         }
     </script>
 </body>
