@@ -6,6 +6,6 @@ The idea with the **Tasks with Tools Arena** is to provide a place where you can
 
 worker.ts
 
-- endpoint POST /set-api-key that sets apiKey provided by user into setMetadata
+- endpoint POST /set-api-key that sets apiKey provided by user
 - endpoint /task that takes mcpUrls:string[] and input, and performs an auto-task https://docs.parallel.ai/api-reference/task-api-v1/create-task-run.md and redirects to /poll?id={id} (using api key from getMetadata)
-- endpoint /poll?id={id} that retrieves the result using https://docs.parallel.ai/api-reference/task-api-v1/retrieve-task-run-result.md (using api key from getMetadata)
+- endpoint /poll?id={id} that retrieves the result using https://docs.parallel.ai/api-reference/task-api-v1/retrieve-task-run-result.md (using api key)

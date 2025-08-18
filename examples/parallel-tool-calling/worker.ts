@@ -11,38 +11,19 @@ import {
 
 //@ts-ignore
 import homepage from "./homepage.html";
+export { MCPProviders };
+import { withSimplerAuth, UserContext } from "simplerauth-client";
 
-import { UserDO, withSimplerAuth } from "x-oauth-client-provider";
-
-interface UserContext<T = { [key: string]: any }> extends ExecutionContext {
-  /** Should contain authenticated X User */
-  user:
-    | {
-        id: string;
-        name: string;
-        username: string;
-        profile_image_url?: string;
-        verified?: boolean;
-      }
-    | undefined;
-  /** X Access token */
-  xAccessToken: string | undefined;
-  /** Access token. Can be decrypted with client secret to retrieve X access token */
-  accessToken: string | undefined;
-  registered: boolean;
-  getMetadata?: () => Promise<T>;
-  setMetadata?: (metadata: T) => Promise<void>;
+interface Env extends MCPOAuthEnv {
+  PARALLEL_TASKS_MCP_KV: KVNamespace;
 }
-export { UserDO, MCPProviders };
 
-export interface Env extends MCPOAuthEnv {
-  UserDO: DurableObjectNamespace<UserDO>;
-  CLIENT_ID: string;
-  CLIENT_SECRET: string;
+interface UserConfig {
+  parallelApiKey?: string;
 }
 
 export default {
-  fetch: withSimplerAuth(async (request, env, ctx: UserContext) => {
+  fetch: withSimplerAuth<Env>(async (request, env, ctx) => {
     const url = new URL(request.url);
 
     // Handle MCP OAuth routes first
@@ -74,9 +55,25 @@ export default {
       }
 
       const body = (await request.json()) as { apiKey: string };
-      const metadata = (await ctx.getMetadata?.()) || {};
-      metadata.parallelApiKey = body.apiKey;
-      await ctx.setMetadata?.(metadata);
+
+      // Get existing config or create new one
+      const configKey = `config:${ctx.user.id}`;
+      const existingConfigJson = await env.PARALLEL_TASKS_MCP_KV.get(configKey);
+      const existingConfig: UserConfig = existingConfigJson
+        ? JSON.parse(existingConfigJson)
+        : {};
+
+      // Update with new API key
+      const updatedConfig: UserConfig = {
+        ...existingConfig,
+        parallelApiKey: body.apiKey,
+      };
+
+      // Store updated config
+      await env.PARALLEL_TASKS_MCP_KV.put(
+        configKey,
+        JSON.stringify(updatedConfig)
+      );
 
       return new Response(JSON.stringify({ success: true }), {
         headers: { "Content-Type": "application/json" },
@@ -89,8 +86,11 @@ export default {
         return new Response("Unauthorized", { status: 401 });
       }
 
-      const metadata = (await ctx.getMetadata?.()) || {};
-      const apiKey = metadata.parallelApiKey;
+      // Get API key from KV
+      const configKey = `config:${ctx.user.id}`;
+      const configJson = await env.PARALLEL_TASKS_MCP_KV.get(configKey);
+      const config: UserConfig = configJson ? JSON.parse(configJson) : {};
+      const apiKey = config.parallelApiKey;
 
       if (!apiKey) {
         return new Response(JSON.stringify({ error: "No API key set" }), {
@@ -109,6 +109,18 @@ export default {
       const requestedProviders = allProviders.filter((p) =>
         body.mcpUrls.includes(p.mcp_url)
       );
+
+      if (requestedProviders.length === 0) {
+        return new Response(
+          JSON.stringify({
+            error: "Providers weren't found in users available providers",
+          }),
+          {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+      }
 
       // Build MCP servers array for Parallel API
       const mcpServers = requestedProviders.map((provider) => {
@@ -130,6 +142,13 @@ export default {
         return server;
       });
 
+      const json = {
+        input: body.input,
+        processor: "pro",
+        mcp_servers: mcpServers,
+      };
+
+      console.log("json", json);
       // Call Parallel API
       const parallelResponse = await fetch(
         "https://api.parallel.ai/v1/tasks/runs",
@@ -140,11 +159,7 @@ export default {
             "x-api-key": apiKey,
             "parallel-beta": "mcp-server-2025-07-17",
           },
-          body: JSON.stringify({
-            input: body.input,
-            processor: "base",
-            mcp_servers: mcpServers,
-          }),
+          body: JSON.stringify(json),
         }
       );
 
@@ -178,8 +193,11 @@ export default {
         return new Response("Missing run ID", { status: 400 });
       }
 
-      const metadata = (await ctx.getMetadata?.()) || {};
-      const apiKey = metadata.parallelApiKey;
+      // Get API key from KV
+      const configKey = `config:${ctx.user.id}`;
+      const configJson = await env.PARALLEL_TASKS_MCP_KV.get(configKey);
+      const config: UserConfig = configJson ? JSON.parse(configJson) : {};
+      const apiKey = config.parallelApiKey;
 
       if (!apiKey) {
         return new Response("No API key set", { status: 400 });
@@ -226,7 +244,7 @@ export default {
 
     return new Response("Not found", { status: 404 });
   }),
-} satisfies ExportedHandler<Env>;
+};
 
 async function handleLandingPage(
   user: UserContext["user"],
@@ -239,13 +257,18 @@ async function handleLandingPage(
   if (user) {
     // Get user's MCP providers using the new package
     const providers = await getMCPProviders(env, user.id);
-    const metadata = (await ctx.getMetadata?.()) || {};
+
+    // Get API key from KV
+    const configKey = `config:${user.id}`;
+    const configJson = await env.PARALLEL_TASKS_MCP_KV.get(configKey);
+    const config: UserConfig = configJson ? JSON.parse(configJson) : {};
+    const apiKey = config.parallelApiKey;
 
     const userData = {
       user,
       providers,
-      hasApiKey: !!metadata.parallelApiKey,
-      curlExample: generateCurlExample(providers, metadata.parallelApiKey),
+      hasApiKey: !!apiKey,
+      curlExample: generateCurlExample(providers, apiKey || "YOUR_API_KEY"),
     };
 
     // Inject data into HTML

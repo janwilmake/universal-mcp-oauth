@@ -4,7 +4,7 @@
   },
   "dependencies": {
     "mcp-client-server-registration": "^0.0.4",
-    "universal-mcp-oauth": "^0.0.6",
-    "x-oauth-client-provider": "^0.0.12"
+    "simplerauth-client": "^0.0.5",
+    "universal-mcp-oauth": "^0.0.6"
   }
 }

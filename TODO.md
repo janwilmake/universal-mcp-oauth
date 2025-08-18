@@ -9,10 +9,11 @@
 - ✅ Find a way to make `universal-mcp-oauth` very pluggable so people can make apps with this pattern more easily.
 - ✅ Create parallel recipe for tasks that use MCPs ([parallel-tool-calling](../parallel-tool-calling/))
 - ✅ Test for examples, fix 404: `Token exchange failed: MCP server request failed: 404`. Update README about limitations
-- Test task creation with frontend polling
+- Test task creation with frontend polling. Fix errors - `{"type":"error","error":{"ref_id":"51f78b52-913c-4198-ad65-eeb176ad6972","message":"Run failed.","detail":null}}`
+- After it works, start testing tasks with MCPs and start talking about it!
 - Understand problems with current implementation (https://letmeprompt.com/httpsmodelcontext-o5keiu0)
-  - add token audience validation
-  - add refresh token rotation. figure out the best way to do this
+  - Add token audience validation
+  - Add refresh token rotation. figure out the best way to do this
     - maybe adding a proxy (/mcp/proxy/{url}) that performs refresh if token is expired will be best?
     - maybe just expose a function `refreshTokenIfNeeded(provider)` or even `stub.getFreshProviders(mcpUrls:string[]):Promise<MCPProvider[]>`
 - Add tool indexation to providers table

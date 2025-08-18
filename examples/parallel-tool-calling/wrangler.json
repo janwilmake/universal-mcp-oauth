@@ -6,13 +6,17 @@
   "observability": { "logs": { "enabled": true } },
   "assets": { "directory": "./" },
   "durable_objects": {
-    "bindings": [
-      { "name": "UserDO", "class_name": "UserDO" },
-      { "name": "MCPProviders", "class_name": "MCPProviders" }
-    ]
+    "bindings": [{ "name": "MCPProviders", "class_name": "MCPProviders" }]
   },
   "migrations": [
-    { "tag": "v1", "new_sqlite_classes": ["UserDO", "MCPProviders"] }
+    { "tag": "v1", "new_sqlite_classes": ["UserDO", "MCPProviders"] },
+    { "tag": "v2", "deleted_classes": ["UserDO"] }
   ],
-  "routes": [{ "custom_domain": true, "pattern": "task.wilmake.com" }]
+  "routes": [{ "custom_domain": true, "pattern": "mcp.p0web.com" }],
+  "kv_namespaces": [
+    {
+      "binding": "PARALLEL_TASKS_MCP_KV",
+      "id": "566a695a2f784c88971388544581688a"
+    }
+  ]
 }
