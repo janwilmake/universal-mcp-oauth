@@ -228,18 +228,10 @@ export default {
       });
     }
 
-    // Redirect to login if no user for protected routes
-    if (!ctx.user) {
-      return new Response(null, {
-        status: 302,
-        headers: { Location: "/authorize" },
-      });
-    }
-
     const { user } = ctx;
 
     if (url.pathname === "/") {
-      return handleLandingPage(user, env, url.origin, ctx);
+      return handleLandingPage(user, env);
     }
 
     return new Response("Not found", { status: 404 });
@@ -247,10 +239,8 @@ export default {
 };
 
 async function handleLandingPage(
-  user: UserContext["user"],
-  env: Env,
-  origin: string,
-  ctx: UserContext
+  user: UserContext["user"] | undefined,
+  env: Env
 ) {
   let html = homepage;
 

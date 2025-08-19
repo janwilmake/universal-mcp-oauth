@@ -4,494 +4,103 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Parallel Recipe #03 - Tasks with MCP tools</title>
+    <title>Parallel Tasks with MCP tools</title>
+    <link rel="icon" type="image/svg+xml" href="https://assets.p0web.com/dark-parallel-symbol-270.svg">
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        @font-face {
+            font-family: 'FT System Mono';
+            src: url('https://assets.p0web.com/FTSystemMono-Regular.woff2') format('woff2');
+            font-weight: 400;
+        }
+
+        @font-face {
+            font-family: 'FT System Mono';
+            src: url('https://assets.p0web.com/FTSystemMono-Medium.woff2') format('woff2');
+            font-weight: 500;
+        }
+
+        @font-face {
+            font-family: 'Gerstner Programm';
+            src: url('https://assets.p0web.com/Gerstner-ProgrammRegular.woff2') format('woff2');
+            font-weight: 400;
+        }
+
+        @font-face {
+            font-family: 'Gerstner Programm';
+            src: url('https://assets.p0web.com/Gerstner-ProgrammMedium.woff2') format('woff2');
+            font-weight: 500;
         }
 
         body {
-            font-family: 'Courier New', monospace;
-            background-color: #1a1a1a;
-            color: #d0d0d0;
-            line-height: 1.5;
+            font-family: 'FT System Mono', 'Courier New', monospace;
         }
 
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-            padding: 30px 0;
-            background: #2a2a2a;
-            color: #f0f0f0;
-            border: 2px solid #404040;
-        }
-
-        .header h1 {
-            font-family: 'Courier New', monospace;
-            font-size: 1.8em;
-            font-weight: bold;
-            margin: 0 0 10px 0;
-            text-transform: lowercase;
-        }
-
-        .header .brand {
-            font-weight: bold;
-        }
-
-        .header p {
-            margin: 0;
-            font-size: 1em;
-            opacity: 0.8;
-        }
-
-        .nav {
-            display: flex;
-            gap: 15px;
-            justify-content: center;
-            margin: 25px 0;
-            flex-wrap: wrap;
-        }
-
-        .nav a {
-            display: inline-flex;
-            align-items: center;
-            padding: 10px 20px;
-            background: #2a2a2a;
-            color: #d0d0d0;
-            text-decoration: none;
-            border: 1px solid #404040;
-            font-weight: normal;
-            transition: all 0.2s;
-        }
-
-        .nav a:hover {
-            background: #333333;
-            border-color: #555555;
-        }
-
-        .nav a.primary {
-            background: #333333;
-            color: #f0f0f0;
-            border-color: #555555;
-        }
-
-        .nav a.primary:hover {
-            background: #404040;
-            border-color: #666666;
-        }
-
-        .form-group {
-            margin: 15px 0;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: normal;
-            color: #d0d0d0;
-        }
-
-        input,
-        button,
-        textarea {
-            width: 100%;
-            padding: 10px;
-            margin: 5px 0;
-            border: 1px solid #404040;
-            font-size: 14px;
-            background: #2a2a2a;
-            color: #d0d0d0;
-            font-family: 'Courier New', monospace;
-        }
-
-        input:focus,
-        textarea:focus {
-            outline: none;
-            border-color: #555555;
-            background: #333333;
-        }
-
-        button {
-            background: #333333;
-            color: #f0f0f0;
-            border: 1px solid #555555;
-            cursor: pointer;
-        }
-
-        button:hover {
-            background: #404040;
-            border-color: #666666;
-        }
-
-        button.secondary {
-            background: #2a2a2a;
-            color: #d0d0d0;
-            border: 1px solid #404040;
-        }
-
-        button.secondary:hover {
-            background: #333333;
-            color: #f0f0f0;
-        }
-
-        button.danger {
-            background: #442222;
-            border-color: #662222;
-            width: auto;
-            padding: 6px 12px;
-            margin-top: 8px;
-        }
-
-        button.danger:hover {
-            background: #553333;
-            border-color: #773333;
-        }
-
-        .provider {
-            border: 1px solid #404040;
-            padding: 15px;
-            margin: 10px 0;
-            background: #2a2a2a;
-        }
-
-        .provider h4 {
-            margin: 0 0 8px 0;
-            color: #f0f0f0;
-            font-size: 1.1em;
-            font-weight: normal;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .provider p {
-            margin: 4px 0;
-            color: #b0b0b0;
-            font-size: 13px;
-        }
-
-        .provider .meta {
-            display: flex;
-            gap: 10px;
-            margin: 8px 0;
-            flex-wrap: wrap;
-        }
-
-        .provider .meta span {
-            background: #333333;
-            padding: 2px 6px;
-            font-size: 11px;
-            color: #a0a0a0;
-        }
-
-        .curl-example {
-            background: #000000;
-            border: 1px solid #333333;
-            padding: 15px;
-            margin: 20px 0;
-            font-family: 'Courier New', monospace;
-            font-size: 11px;
-            overflow-x: auto;
-            color: #d0d0d0;
-        }
-
-        .success {
-            color: #90c090;
-            background: #223322;
-            border: 1px solid #445544;
-            padding: 12px;
-            margin: 15px 0;
-        }
-
-        .error {
-            color: #c09090;
-            background: #332222;
-            border: 1px solid #554444;
-            padding: 12px;
-            margin: 15px 0;
-        }
-
-        .login-prompt {
-            background: #2a2a1a;
-            border: 1px solid #4a4a2a;
-            color: #d0d090;
-            padding: 20px;
-            margin: 25px 0;
-            text-align: center;
-        }
-
-        .login-prompt a {
-            color: #f0f0a0;
-            text-decoration: none;
-            font-weight: normal;
-        }
-
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 15px;
-            margin: 25px 0;
-        }
-
-        .stat {
-            background: #2a2a2a;
-            padding: 15px;
-            text-align: center;
-            border: 1px solid #404040;
-        }
-
-        .stat-number {
-            font-size: 1.5em;
-            font-weight: bold;
-            color: #f0f0f0;
-            display: block;
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 30px 15px;
-            color: #909090;
-        }
-
-        .mcp-examples {
-            margin: 25px 0;
-        }
-
-        .mcp-examples h3 {
-            color: #f0f0f0;
-            margin-bottom: 15px;
-            font-weight: normal;
-        }
-
-        .mcp-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 10px;
-            margin: 15px 0;
-        }
-
-        .mcp-card {
-            background: #2a2a2a;
-            border: 1px solid #404040;
-            padding: 12px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .mcp-card:hover {
-            border-color: #555555;
-            background: #333333;
-        }
-
-        .mcp-card h4 {
-            color: #f0f0f0;
-            margin: 0 0 6px 0;
-            font-size: 1em;
-            font-weight: normal;
-        }
-
-        .mcp-card p {
-            color: #b0b0b0;
-            font-size: 12px;
-            margin: 3px 0;
-        }
-
-        .mcp-card .category {
-            background: #333333;
-            color: #a0a0a0;
-            padding: 1px 6px;
-            font-size: 10px;
-            display: inline-block;
-            margin-top: 6px;
-        }
-
-        .task-form {
-            background: #2a2a2a;
-            border: 1px solid #404040;
-            padding: 20px;
-            margin: 20px 0;
-        }
-
-        .task-form h3 {
-            margin: 0 0 15px 0;
-            color: #f0f0f0;
-            font-weight: normal;
-        }
-
-        .provider-selector {
-            margin: 10px 0;
-        }
-
-        .provider-selector label {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin: 5px 0;
-            cursor: pointer;
-        }
-
-        .provider-selector input[type="checkbox"] {
-            width: auto;
-            margin: 0;
-        }
-
-        textarea {
-            min-height: 80px;
-            resize: vertical;
-        }
-
-        .mode-toggle {
-            position: fixed;
-            bottom: 15px;
-            right: 15px;
-            background: #2a2a2a;
-            border: 1px solid #404040;
-            padding: 6px 10px;
-            font-size: 11px;
-            color: #a0a0a0;
-            text-decoration: none;
-            font-family: 'Courier New', monospace;
-        }
-
-        .mode-toggle:hover {
-            border-color: #555555;
-            color: #d0d0d0;
-        }
-
-        .api-key-form {
-            background: #2a2a2a;
-            border: 1px solid #404040;
-            padding: 15px;
-            margin: 15px 0;
-        }
-
-        @media (max-width: 768px) {
-            .nav {
-                flex-direction: column;
-                align-items: center;
-            }
-
-            .nav a {
-                width: 180px;
-                text-align: center;
-            }
-
-            .stats {
-                grid-template-columns: 1fr;
-            }
-
-            .mcp-grid {
-                grid-template-columns: 1fr;
-            }
+        .font-gerstner {
+            font-family: 'Gerstner Programm', 'FT System Mono', monospace;
         }
     </style>
+    <script>
+        tailwind.config = {
+            darkMode: 'media',
+            theme: {
+                extend: {
+                    colors: {
+                        'parallel-off-white': '#fcfcfa',
+                        'parallel-black': '#1d1b16',
+                        'parallel-neural': '#d8d0bf',
+                        'parallel-signal': '#fb631b',
+                    }
+                }
+            }
+        }
+    </script>
 </head>
 
-<body>
-    <div class="container">
-        <div class="header">
-            <h1><span class="brand">parallel</span> Recipe #03 - Tasks with MCP tools</h1>
-            <p>Authenticate with MCP servers and execute tasks with powerful toolcalling</p>
-        </div>
-
-        <div class="nav">
-            <a href="#examples" class="primary">Try MCP Examples</a>
-            <a href="#add-server">Add Custom Server</a>
-            <a href="#task-runner">Run Tasks</a>
+<body
+    class="bg-parallel-off-white dark:bg-parallel-black text-parallel-black dark:text-parallel-off-white min-h-screen">
+    <div class="max-w-4xl mx-auto px-4 py-6">
+        <!-- Header -->
+        <div
+            class="text-center bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 mb-6">
+            <div class="flex items-center justify-center gap-3 mb-3">
+                <picture>
+                    <source media="(prefers-color-scheme: dark)"
+                        srcset="https://assets.p0web.com/white-parallel-symbol-270.svg">
+                    <img src="https://assets.p0web.com/dark-parallel-symbol-270.svg" alt="Parallel Logo" class="h-8">
+                </picture>
+                <h1 class="font-gerstner text-2xl font-medium">
+                    <span class="text-parallel-signal">parallel</span> with MCP
+                </h1>
+            </div>
+            <p class="text-gray-600 dark:text-gray-400 text-sm">
+                Tasks with MCP tools - Authenticate with MCP servers and execute tasks with powerful toolcalling
+            </p>
         </div>
 
         <div id="content">
-            <div class="login-prompt">
-                <p>Please <a href="/authorize?redirect_to=/">authenticate with X (Twitter)</a>
-                    to manage your MCP server connections and access enterprise features.</p>
+            <div
+                class="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 text-center">
+                <p>Please <a href="/authorize?redirect_to=/"
+                        class="text-parallel-signal hover:underline font-medium">authenticate with X</a>
+                    to manage your MCP server connections</p>
             </div>
         </div>
     </div>
-
-    <a href="?mode=machine" class="mode-toggle">MACHINE</a>
 
     <script>
         const urlParams = new URLSearchParams(window.location.search);
         const success = urlParams.get('success');
 
-
         const usefulMCPs = [
-
-            { name: "Linear", category: "Tasks", url: "https://mcp.linear.app/mcp", description: "Let the task see your linear" },
-
-            { name: "Notion", category: "Documents", url: "https://mcp.notion.com/mcp", description: "Get your notion stuff as part of your task" },
-            {
-                name: "Prisma Postgres",
-                url: "https://mcp.prisma.io/mcp",
-                category: "Database",
-                description: "Database schema management, queries, and ORM operations"
-            },
-
-            {
-                name: "Context7 (on Smithery.ai)",
-                url: "https://server.smithery.ai/@upstash/context7-mcp/mcp",
-                description: "Find docs for libraries", category: "Coding"
-            },
-
-            {
-                name: "Hugging Face",
-                category: "AI/ML",
-                url: "https://hf.co/mcp",
-                auth: "Open",
-                description: "AI models, datasets, and machine learning tools"
-            },
-
-            {
-                name: "Find-A-Domain",
-                category: "Productivity",
-                url: "https://api.findadomain.dev/mcp",
-                auth: "Open",
-                description: "Domain name search and availability checking"
-            },
-            {
-                name: "Manifold",
-                category: "Forecasting",
-                url: "https://api.manifold.markets/v0/mcp",
-                auth: "Open",
-                description: "Prediction markets and forecasting platform"
-            },
-            {
-                name: "GitMCP",
-                category: "Software Development",
-                url: "https://gitmcp.io/docs",
-                auth: "Open",
-                description: "Git repository management and documentation"
-            },
-
-            {
-                name: "Exa", url: "https://mcp.exa.ai/mcp?exaApiKey=your-exa-api-key", description: "Vector Search", category: "Search"
-            },
-
-
-            { name: "Reddit (agentic.so)", url: "https://gateway.agentic.so/@agentic/reddit/mcp", description: "Get threads content on Reddit", category: "Context" }
+            { name: "Linear", url: "https://mcp.linear.app/mcp", description: "Task management and issue tracking" },
+            { name: "Notion", url: "https://mcp.notion.com/mcp", description: "Document and workspace management" },
+            { name: "Prisma Postgres", url: "https://mcp.prisma.io/mcp", description: "Database schema management and queries" },
+            { name: "Context7 (Smithery.ai)", url: "https://server.smithery.ai/@upstash/context7-mcp/mcp", description: "Find docs for libraries" },
+            { name: "Hugging Face", url: "https://hf.co/mcp", description: "AI models, datasets, and ML tools" },
+            { name: "Exa", url: "https://mcp.exa.ai/mcp?exaApiKey=your-exa-api-key", description: "Vector Search" },
+            { name: "Reddit (agentic.so)", url: "https://gateway.agentic.so/@agentic/reddit/mcp", description: "Get threads content on Reddit" }
         ];
-        function fillMCPUrl(url) {
-            const input = document.getElementById('mcpUrl');
-            if (input) {
-                input.value = url;
-                input.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                input.focus();
-
-                // Add a subtle highlight effect
-                input.style.borderColor = '#666666';
-                setTimeout(() => {
-                    input.style.borderColor = '';
-                }, 2000);
-            }
-        }
 
         function addMCPServer() {
             const url = document.getElementById('mcpUrl').value.trim();
@@ -592,139 +201,141 @@
         }
 
         function showSuccess(message) {
-            const successDiv = document.createElement('div');
-            successDiv.className = 'success';
-            successDiv.textContent = message;
-            document.body.insertBefore(successDiv, document.body.firstChild);
-            setTimeout(() => successDiv.remove(), 5000);
+            const div = document.createElement('div');
+            div.className = 'fixed top-4 right-4 bg-green-100 dark:bg-green-900 border border-green-400 dark:border-green-600 text-green-700 dark:text-green-300 px-4 py-3 rounded z-50';
+            div.textContent = message;
+            document.body.appendChild(div);
+            setTimeout(() => div.remove(), 5000);
         }
 
         function showError(message) {
-            const errorDiv = document.createElement('div');
-            errorDiv.className = 'error';
-            errorDiv.textContent = message;
-            document.body.insertBefore(errorDiv, document.body.firstChild);
-            setTimeout(() => errorDiv.remove(), 5000);
+            const div = document.createElement('div');
+            div.className = 'fixed top-4 right-4 bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-600 text-red-700 dark:text-red-300 px-4 py-3 rounded z-50';
+            div.textContent = message;
+            document.body.appendChild(div);
+            setTimeout(() => div.remove(), 5000);
         }
 
         function renderUserContent() {
             const { user, providers, curlExample, hasApiKey } = window.userData;
 
+            const datalistOptions = usefulMCPs.map(mcp =>
+                `<option value="${mcp.url}">${mcp.name} - ${mcp.description}</option>`
+            ).join('');
+
             document.getElementById('content').innerHTML = `
-                <div class="stats">
-                    <div class="stat">
-                        <span class="stat-number">${providers.length}</span>
-                        <span>Connected Servers</span>
+                <!-- Compact stats and controls -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                    <div class="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 text-center">
+                        <div class="text-2xl font-bold text-parallel-signal">${providers.length}</div>
+                        <div class="text-sm text-gray-600 dark:text-gray-400">Connected Servers</div>
                     </div>
-                    <div class="stat">
-                        <span class="stat-number">${user.verified ? '✓' : '○'}</span>
-                        <span>Verified Account</span>
+                    <div class="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 text-center">
+                        <div class="text-2xl font-bold ${user.verified ? 'text-green-500' : 'text-gray-400'}">${user.verified ? '✓' : '○'}</div>
+                        <div class="text-sm text-gray-600 dark:text-gray-400">Verified Account</div>
                     </div>
-                    <div class="stat">
-                        <span class="stat-number">${hasApiKey ? '✓' : '○'}</span>
-                        <span>API Key Set</span>
+                    <div class="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 text-center md:col-span-2 lg:col-span-1">
+                        <div class="text-2xl font-bold ${hasApiKey ? 'text-green-500' : 'text-gray-400'}">${hasApiKey ? '✓' : '○'}</div>
+                        <div class="text-sm text-gray-600 dark:text-gray-400">API Key Set</div>
                     </div>
                 </div>
                 
-                <div>
-                    <p>Welcome back, <strong>${user.name}</strong> (@${user.username})</p>
-                    
-                    <div class="api-key-form">
-                        <h3>Parallel API Key</h3>
-                        <div class="form-group">
-                            <label for="apiKey">Your Parallel API Key</label>
+                <div class="mb-4">
+                    <p class="text-gray-600 dark:text-gray-400">Welcome back, <strong class="text-parallel-black dark:text-parallel-off-white">${user.name}</strong> (@${user.username})</p>
+                </div>
+                
+                <!-- Compact forms section -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <!-- API Key Form -->
+                    <div class="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                        <h3 class="font-gerstner font-medium mb-3">Parallel API Key</h3>
+                        <div class="space-y-3">
                             <input 
                                 type="password" 
                                 id="apiKey" 
                                 placeholder="Enter your Parallel API key"
                                 value="${hasApiKey ? '••••••••••••••••' : ''}"
+                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-parallel-black dark:text-parallel-off-white text-sm"
                             >
-                            <button onclick="setApiKey()">Update API Key</button>
-                        </div>
-                        <p style="font-size: 12px; color: #a0a0a0;">Get your API key from <a href="https://parallel.ai" style="color: #d0d090;">parallel.ai</a></p>
-                    </div>
-                    
-                    ${hasApiKey && providers.length > 0 ? `
-                        <div class="task-form" id="task-runner">
-                            <h3>Execute Task with MCP Tools</h3>
-                            <div class="form-group">
-                                <label>Select MCP Servers to use:</label>
-                                <div class="provider-selector">
-                                    ${providers.map(provider => `
-                                        <label>
-                                            <input type="checkbox" value="${provider.mcp_url}" data-name="${provider.name}">
-                                            ${provider.name} (${provider.mcp_url})
-                                        </label>
-                                    `).join('')}
-                                </div>
-                            </div>
-                            <div class="form-group">
-                                <label for="taskInput">Task Input</label>
-                                <textarea 
-                                    id="taskInput" 
-                                    placeholder="What would you like to do with these MCP tools?"
-                                ></textarea>
-                            </div>
-                            <button onclick="runTask()">Execute Task</button>
-                        </div>
-                    ` : ''}
-                    
-                    <div class="mcp-examples" id="examples">
-                        <h3>🚀 Popular MCP Tools for Tasks</h3>
-                        <p style="color: #b0b0b0; margin-bottom: 15px;">Click any example below to quickly connect and start using these powerful tools in your tasks.</p>
-                        <div class="mcp-grid">
-                            ${usefulMCPs.map(mcp => `
-                                <div class="mcp-card" onclick="fillMCPUrl('${mcp.url}')">
-                                    <h4>${mcp.name}</h4>
-                                    <p>${mcp.description}</p>
-                                    <span class="category">${mcp.category}</span>
-                                </div>
-                            `).join('')}
+                            <button onclick="setApiKey()" class="w-full bg-parallel-signal hover:bg-orange-600 text-white px-4 py-2 rounded text-sm font-medium">
+                                Update API Key
+                            </button>
+                            <p class="text-xs text-gray-500">Get your API key from <a href="https://parallel.ai" class="text-parallel-signal hover:underline">parallel.ai</a></p>
                         </div>
                     </div>
                     
-                    <h2 id="add-server">Add Custom MCP Server</h2>
-                    <div class="form-group">
-                        <label for="mcpUrl">MCP Server URL (Streamable HTTP Only and no custom headers!)</label>
-                        <input 
-                            type="url" 
-                            id="mcpUrl" 
-                            placeholder="https://your-mcp-server.com" 
-                            value=""
-                        >
-                        <button onclick="addMCPServer()">Connect MCP Server</button>
+                    <!-- Add MCP Server Form -->
+                    <div class="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                        <h3 class="font-gerstner font-medium mb-3">Add MCP Server</h3>
+                        <div class="space-y-3">
+                            <input 
+                                type="url" 
+                                id="mcpUrl" 
+                                placeholder="MCP Server URL"
+                                list="mcpServers"
+                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-parallel-black dark:text-parallel-off-white text-sm"
+                            >
+                            <datalist id="mcpServers">
+                                ${datalistOptions}
+                            </datalist>
+                            <button onclick="addMCPServer()" class="w-full bg-parallel-signal hover:bg-orange-600 text-white px-4 py-2 rounded text-sm font-medium">
+                                Connect MCP Server
+                            </button>
+                            <p class="text-xs text-gray-500">Streamable HTTP only, no custom headers</p>
+                        </div>
                     </div>
-                    
-                    <h2>Your Connected Servers</h2>
-                    <div id="providers">
-                        ${providers.length === 0 ?
-                    '<div class="empty-state"><p>No MCP servers connected yet.<br>Try one of the examples above or add a custom server.</p></div>' :
-                    providers.map(provider => `
-                                <div class="provider">
-                                    <h4>🔗 ${provider.name}</h4>
-                                    <p><strong>URL:</strong> ${provider.mcp_url}</p>
-                                    <div class="meta">
-                                        <span>Connected: ${new Date(provider.created_at).toLocaleDateString()}</span>
-                                        ${provider.expires_at ? `<span>Expires: ${new Date(provider.expires_at).toLocaleDateString()}</span>` : '<span>No expiration</span>'}
-                                    </div>
-                                    <button onclick="removeMCPServer('${provider.mcp_url}')" class="danger">Remove Connection</button>
-                                </div>
-                            `).join('')
-                }
-                    </div>
-                    
-                    ${providers.length > 0 ? `
-                        <h2>Integration Examples</h2>
-                        <p>Use your connected MCP servers with these AI platforms:</p>
-                        <pre class="curl-example">${curlExample}</pre>
-                        <p><small>Replace <code>$ANTHROPIC_API_KEY</code>, <code>$PARALLEL_API_KEY</code>, and <code>$OPENAI_API_KEY</code> with your actual API keys.</small></p>
-                    ` : ''}
                 </div>
+                
+                ${hasApiKey && providers.length > 0 ? `
+                    <!-- Task Runner -->
+                    <div class="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 mb-6">
+                        <h3 class="font-gerstner font-medium text-lg mb-4">Execute Task with MCP Tools</h3>
+                        
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium mb-2">Select MCP Servers:</label>
+                            <div class="provider-selector space-y-2">
+                                ${providers.map(provider => `
+                                    <label class="flex items-center justify-between p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded group cursor-pointer">
+                                        <div class="flex items-center space-x-2">
+                                            <input type="checkbox" value="${provider.mcp_url}" data-name="${provider.name}" class="accent-parallel-signal">
+                                            <span class="text-sm">${provider.name}</span>
+                                            <span class="text-xs text-gray-500">(${new URL(provider.mcp_url).hostname})</span>
+                                        </div>
+                                        <button onclick="removeMCPServer('${provider.mcp_url}')" 
+                                                class="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 text-xs px-2 py-1 transition-opacity">
+                                            ×
+                                        </button>
+                                    </label>
+                                `).join('')}
+                            </div>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label for="taskInput" class="block text-sm font-medium mb-2">Task Input</label>
+                            <textarea 
+                                id="taskInput" 
+                                placeholder="What would you like to do with these MCP tools?"
+                                rows="3"
+                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-parallel-black dark:text-parallel-off-white text-sm resize-none"
+                            ></textarea>
+                        </div>
+                        
+                        <button onclick="runTask()" class="w-full bg-parallel-signal hover:bg-orange-600 text-white px-6 py-3 rounded font-medium">
+                            Execute Task
+                        </button>
+                    </div>
+                ` : ''}
+                
+                ${providers.length > 0 ? `
+                    <div class="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
+                        <h2 class="font-gerstner font-medium text-lg mb-3">Integration Examples</h2>
+                        <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">Use your connected MCP servers with these AI platforms:</p>
+                        <pre class="bg-gray-900 dark:bg-black text-green-400 p-4 rounded text-xs overflow-x-auto border"><code>${curlExample}</code></pre>
+                        <p class="text-xs text-gray-500 mt-3">Replace <code class="bg-gray-200 dark:bg-gray-700 px-1 rounded">$ANTHROPIC_API_KEY</code>, <code class="bg-gray-200 dark:bg-gray-700 px-1 rounded">$PARALLEL_API_KEY</code>, and <code class="bg-gray-200 dark:bg-gray-700 px-1 rounded">$OPENAI_API_KEY</code> with your actual API keys.</p>
+                    </div>
+                ` : ''}
             `;
         }
-
-
-
 
         if (window.userData) {
             renderUserContent();
@@ -732,8 +343,6 @@
                 showSuccess('Successfully connected to MCP server!');
             }
         }
-
-
     </script>
 </body>
 
