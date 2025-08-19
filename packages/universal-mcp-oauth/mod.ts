@@ -1,6 +1,8 @@
 import { DurableObject } from "cloudflare:workers";
 import { constructMCPAuthorizationUrl } from "mcp-client-server-registration";
-
+/*
+- Upon authorization, list all tools and store these into the DB as well and return to HTML
+*/
 export interface MCPOAuthEnv {
   MCPProviders: DurableObjectNamespace<MCPProviders>;
 }

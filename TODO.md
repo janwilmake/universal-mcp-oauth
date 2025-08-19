@@ -10,20 +10,31 @@
 - ✅ Create parallel recipe for tasks that use MCPs ([parallel-tool-calling](examples/parallel-tool-calling/))
 - ✅ Test for examples, fix 404: `Token exchange failed: MCP server request failed: 404`. Update README about limitations
 
+# August 19, 2025
+
+- ✅ Improved UI, a lot
+
 # TODO
 
-- Update the discovery mechanism to draft: https://letmeprompt.com/current-httpsmod-v4jrsv0.
-- Client needs additional check to `.well-known` if www-authenticate wasn't provided: https://github.com/modelcontextprotocol/modelcontextprotocol/issues/985
-- See why it's slow, potentially since we don't close the initialization automatically after the first message got back.
-- Add refresh mechanism for a token (if needed).
-- Test against anthropic MCP api
-- Test task creation with frontend polling. Fix errors - `{"type":"error","error":{"ref_id":"51f78b52-913c-4198-ad65-eeb176ad6972","message":"Run failed.","detail":null}}`
-- After it works, start testing tasks with MCPs and start talking about it!
+- `universal-mcp-oauth`
+  - Update discovery mechanism to draft: https://letmeprompt.com/current-httpsmod-v4jrsv0?key=result
+  - (🟠CONTEXT) Client needs additional check to `.well-known` if www-authenticate wasn't provided: https://github.com/modelcontextprotocol/modelcontextprotocol/issues/985
+  - For text/event-streams, close the initialization automatically after the required message came back, don't wait for more. Same goes for `tools/list`.
+  - `tools/list` function: https://letmeprompt.com/httpsmodelcontext-ap04440?key=result
+  - Upon authorization, list all tools and store these into the DB as well, and return along with servers from the getProviders function
+
+`worker.ts & homepage.html`
+
+- In HTML, when selecting MCPs, allow deselecting tools as well (all selected by default)
+- Put the curl generation in frontend (selection mechanism should update curl)
+- Test against anthropic messages API as well (make that secondary curl upon selection)
+- Allow choosing processor and output text or auto (for simplicity, for now)
+
+After it works, start testing tasks with MCPs and start talking about it!
+
+- Fix errors - `{"type":"error","error":{"ref_id":"51f78b52-913c-4198-ad65-eeb176ad6972","message":"Run failed.","detail":null}}`
+- Add refresh token rotation. figure out the best way to do this
+  - maybe adding a proxy (/mcp/proxy/{url}) that performs refresh if token is expired will be best?
+  - maybe just expose a function `refreshTokenIfNeeded(provider)` or even `stub.getFreshProviders(mcpUrls:string[]):Promise<MCPProvider[]>`
 - Understand problems with current implementation (https://letmeprompt.com/httpsmodelcontext-o5keiu0)
-  - Add token audience validation
-  - Add refresh token rotation. figure out the best way to do this
-    - maybe adding a proxy (/mcp/proxy/{url}) that performs refresh if token is expired will be best?
-    - maybe just expose a function `refreshTokenIfNeeded(provider)` or even `stub.getFreshProviders(mcpUrls:string[]):Promise<MCPProvider[]>`
-- Add tool indexation to providers table
-- Allow user to set specificity when doing a task
 - Create Integration-friendly Task API with MCP IDP built-in
