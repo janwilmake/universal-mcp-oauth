@@ -12,7 +12,7 @@
 
 # August 19, 2025
 
-- ✅ Improved UI, a lot
+- ✅ Improved UI a lot
 
 # TODO
 
