@@ -98,7 +98,6 @@ export async function constructMCPAuthorizationUrl(
     if (initResponse.status === 200) {
       // No authentication required - MCP server is public
       noAuthRequired = true;
-      console.log("initialization result", await initResponse.text());
 
       return {
         mcpServerUrl: mcpUrl,
@@ -143,7 +142,7 @@ export async function constructMCPAuthorizationUrl(
     }
   }
 
-  // Fallback 1: Try .well-known/oauth-protected-resource on MCP server host
+  // Fallback 1: Try .well-known/oauth-protected-resource on MCP server host (SEP-985)
   if (authorizationServers.length === 0) {
     try {
       const mcpUrlObj = new URL(mcpUrl);
@@ -198,12 +197,14 @@ export async function constructMCPAuthorizationUrl(
     );
   }
 
-  // Step 4: Verify PKCE support (mandatory)
+  // Step 4: Verify PKCE support (mandatory per draft spec)
   if (
     !authMetadata.code_challenge_methods_supported ||
     !authMetadata.code_challenge_methods_supported.includes("S256")
   ) {
-    throw new Error("Authorization server must support PKCE with S256");
+    throw new Error(
+      "Authorization server must support PKCE with S256 - this is mandatory per MCP specification"
+    );
   }
 
   if (!authMetadata.authorization_endpoint || !authMetadata.token_endpoint) {
@@ -281,7 +282,7 @@ export async function constructMCPAuthorizationUrl(
 }
 
 /**
- * Discovers authorization server metadata using standard OAuth2/OIDC discovery endpoints
+ * Discovers authorization server metadata using enhanced discovery mechanism from draft spec
  * @param {string} issuerUrl - The authorization server issuer URL
  * @returns {Promise<object>} Authorization server metadata
  * @throws {Error} When metadata discovery fails
@@ -290,13 +291,23 @@ async function discoverAuthServerMetadata(issuerUrl) {
   const url = new URL(issuerUrl);
   const basePath = url.pathname === "/" ? "" : url.pathname;
 
-  // Try different discovery endpoints in priority order
-  const endpoints = [
-    `/.well-known/oauth-authorization-server${basePath}`,
-    `/.well-known/openid-configuration${basePath}`,
-    `/.well-known/oauth-authorization-server`, // Fallback without basePath
-    `/.well-known/openid-configuration`, // Fallback without basePath
-  ];
+  // Enhanced discovery endpoints per draft spec
+  const endpoints = [];
+
+  // For issuer URLs with path components
+  if (basePath && basePath !== "") {
+    endpoints.push(
+      `/.well-known/oauth-authorization-server${basePath}`, // OAuth 2.0 with path insertion
+      `/.well-known/openid-configuration${basePath}`, // OpenID Connect with path insertion
+      `${basePath}/.well-known/openid-configuration` // OpenID Connect path appending
+    );
+  }
+
+  // Standard endpoints (for URLs without path or as fallbacks)
+  endpoints.push(
+    `/.well-known/oauth-authorization-server`, // OAuth 2.0 standard
+    `/.well-known/openid-configuration` // OpenID Connect standard
+  );
 
   const discoveryErrors = [];
 
@@ -306,12 +317,31 @@ async function discoverAuthServerMetadata(issuerUrl) {
       const response = await fetch(metadataUrl);
       if (response.ok) {
         const metadata = await response.json();
+
         // Basic validation of required fields
         if (metadata.authorization_endpoint && metadata.token_endpoint) {
+          // Enhanced PKCE verification per draft spec
+          if (!metadata.code_challenge_methods_supported) {
+            discoveryErrors.push(
+              `${endpoint}: Missing code_challenge_methods_supported`
+            );
+            continue;
+          }
+
+          if (!metadata.code_challenge_methods_supported.includes("S256")) {
+            discoveryErrors.push(
+              `${endpoint}: S256 not supported in code_challenge_methods_supported`
+            );
+            continue;
+          }
+
           return metadata;
         }
+
+        discoveryErrors.push(`${endpoint}: Missing required endpoints`);
+      } else {
+        discoveryErrors.push(`${endpoint}: ${response.status}`);
       }
-      discoveryErrors.push(`${endpoint}: ${response.status}`);
     } catch (error) {
       discoveryErrors.push(`${endpoint}: ${error.message}`);
       continue;

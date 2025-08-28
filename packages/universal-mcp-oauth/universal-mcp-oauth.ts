@@ -5,7 +5,7 @@ export interface MCPOAuthEnv {
   MCPProviders: DurableObjectNamespace<MCPProviders>;
 }
 
-export interface MCPProvider {
+export interface MCPProvider extends Record<string, SqlStorageValue> {
   id: string;
   hostname: string;
   name: string;
@@ -18,6 +18,7 @@ export interface MCPProvider {
   created_at: string;
   updated_at: string;
   public?: 0 | 1;
+  tools?: string; // JSON blob of tools array
 }
 
 export class MCPProviders extends DurableObject {
@@ -43,9 +44,17 @@ export class MCPProviders extends DurableObject {
         expires_at INTEGER,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        public BOOLEAN DEFAULT 0
+        public BOOLEAN DEFAULT 0,
+        tools TEXT
       )
     `);
+
+    // Add tools column if it doesn't exist (for existing databases)
+    try {
+      this.sql.exec(`ALTER TABLE providers ADD COLUMN tools TEXT`);
+    } catch (e) {
+      // Column already exists, ignore
+    }
   }
 
   async addProvider(
@@ -56,15 +65,17 @@ export class MCPProviders extends DurableObject {
     clientSecret?: string,
     accessToken?: string,
     expiresIn?: number,
-    isPublic: boolean = false
+    isPublic: boolean = false,
+    tools?: any[]
   ) {
     const expiresAt = expiresIn ? Date.now() + expiresIn * 1000 : null;
+    const toolsJson = tools ? JSON.stringify(tools) : null;
 
     this.sql.exec(
       `
       INSERT OR REPLACE INTO providers 
-      (hostname, name, mcp_url, client_id, client_secret, access_token, expires_at, updated_at, public)
-      VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+      (hostname, name, mcp_url, client_id, client_secret, access_token, expires_at, updated_at, public, tools)
+      VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)
     `,
       hostname,
       name,
@@ -73,13 +84,17 @@ export class MCPProviders extends DurableObject {
       clientSecret || null,
       accessToken || null,
       expiresAt,
-      isPublic ? 1 : 0
+      isPublic ? 1 : 0,
+      toolsJson
     );
   }
 
   async getProvider(mcpUrl: string): Promise<MCPProvider | null> {
     const result = this.sql
-      .exec(`SELECT * FROM providers WHERE mcp_url = ? LIMIT 1`, mcpUrl)
+      .exec<MCPProvider>(
+        `SELECT * FROM providers WHERE mcp_url = ? LIMIT 1`,
+        mcpUrl
+      )
       .toArray()[0];
 
     return result || null;
@@ -94,6 +109,15 @@ export class MCPProviders extends DurableObject {
   async removeProvider(mcpUrl: string) {
     this.sql.exec(`DELETE FROM providers WHERE mcp_url = ?`, mcpUrl);
   }
+
+  async updateProviderTools(mcpUrl: string, tools: any[]) {
+    const toolsJson = JSON.stringify(tools);
+    this.sql.exec(
+      `UPDATE providers SET tools = ?, updated_at = CURRENT_TIMESTAMP WHERE mcp_url = ?`,
+      toolsJson,
+      mcpUrl
+    );
+  }
 }
 
 export interface MCPOAuthConfig {
@@ -107,7 +131,7 @@ export interface MCPOAuthConfig {
   baseUrl?: string; // For custom callback URLs
 }
 
-const VERSION = "v4:";
+const VERSION = "v5:";
 
 export function createMCPOAuthHandler(config: MCPOAuthConfig) {
   const { userId, baseUrl, clientInfo } = config;
@@ -183,7 +207,10 @@ async function handleMCPLogin(
     // If no auth is required, add the provider immediately
     if (authFlowData.noAuthRequired) {
       try {
-        const serverName = await extractMCPServerName(clientInfo, mcpUrl);
+        const { serverName, tools } = await extractMCPServerInfo(
+          clientInfo,
+          mcpUrl
+        );
         await mcpProviders.addProvider(
           hostname,
           serverName,
@@ -192,7 +219,8 @@ async function handleMCPLogin(
           undefined,
           undefined,
           undefined,
-          true
+          true,
+          tools
         );
 
         return new Response(null, {
@@ -296,8 +324,8 @@ async function handleMCPCallback(
       return new Response("No access token received", { status: 400 });
     }
 
-    // Get server name and store provider
-    const serverName = await extractMCPServerName(
+    // Get server name and tools
+    const { serverName, tools } = await extractMCPServerInfo(
       clientInfo,
       authFlowData.mcpServerUrl,
       tokenData.access_token
@@ -311,7 +339,8 @@ async function handleMCPCallback(
       authFlowData.clientSecret,
       tokenData.access_token,
       tokenData.expires_in,
-      false
+      false,
+      tools
     );
 
     // Redirect with success and clear cookie
@@ -358,7 +387,13 @@ async function handleGetProviders(
 ) {
   try {
     const providers = await mcpProviders.getAllProviders();
-    return new Response(JSON.stringify(providers), {
+    // Parse tools JSON for each provider
+    const providersWithParsedTools = providers.map((provider) => ({
+      ...provider,
+      tools: provider.tools ? JSON.parse(provider.tools) : null,
+    }));
+
+    return new Response(JSON.stringify(providersWithParsedTools), {
       headers: { "Content-Type": "application/json" },
     });
   } catch (error) {
@@ -402,10 +437,13 @@ async function exchangeCodeForToken(
     throw new Error(`${tokenResponse.status} ${errorText}`);
   }
 
-  return await tokenResponse.json();
+  return (await tokenResponse.json()) as {
+    access_token: string;
+    expires_in: number;
+  };
 }
 
-async function extractMCPServerName(
+async function extractMCPServerInfo(
   clientInfo: {
     name: string;
     title: string;
@@ -413,17 +451,19 @@ async function extractMCPServerName(
   },
   mcpUrl: string,
   accessToken?: string
-): Promise<string> {
+): Promise<{ serverName: string; tools: any[] }> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     Accept: "application/json,text/event-stream",
+    "MCP-Protocol-Version": "2025-06-18", // Add protocol version header
   };
 
   if (accessToken) {
     headers.Authorization = `Bearer ${accessToken}`;
   }
 
-  const response = await fetch(mcpUrl, {
+  // First, initialize the connection
+  const initResponse = await fetch(mcpUrl, {
     method: "POST",
     headers,
     body: JSON.stringify({
@@ -441,29 +481,138 @@ async function extractMCPServerName(
     }),
   });
 
-  if (!response.ok) {
+  if (!initResponse.ok) {
     throw new Error(
       `MCP server request to ${mcpUrl} failed (access token: ${
         accessToken || "None"
-      }): ${response.status} - ${await response.text()} `
+      }): ${initResponse.status} - ${await initResponse.text()} `
     );
   }
 
-  const contentType = response.headers.get("content-type") || "";
+  // Extract session ID from the initialization response
+  const sessionId = initResponse.headers.get("Mcp-Session-Id");
+
+  const contentType = initResponse.headers.get("content-type") || "";
+  let serverName: string;
 
   if (contentType.includes("text/event-stream")) {
-    const text = await response.text();
-    const lines = text.split("\n");
+    const initResult = await parseSSEResponse(initResponse);
+    if (!initResult.result?.serverInfo?.name) {
+      throw new Error("Could not extract server name from SSE response");
+    }
+    serverName = initResult.result.serverInfo.name;
+  } else {
+    const initData = await initResponse.json();
+    if (!initData.result?.serverInfo?.name) {
+      throw new Error("Could not extract server name from JSON response");
+    }
+    serverName = initData.result.serverInfo.name;
+  }
 
-    for (let i = 0; i < lines.length; i++) {
-      if (lines[i].startsWith("event: message")) {
-        if (i + 1 < lines.length && lines[i + 1].startsWith("data: ")) {
-          const dataLine = lines[i + 1];
-          const jsonStr = dataLine.substring(6);
+  // Send initialized notification with session ID if provided
+  if (sessionId) {
+    const initializedHeaders = { ...headers };
+    initializedHeaders["Mcp-Session-Id"] = sessionId;
+
+    await fetch(mcpUrl, {
+      method: "POST",
+      headers: initializedHeaders,
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        method: "initialized",
+        params: {},
+      }),
+    });
+  }
+
+  // Now get the tools list with session ID
+  const toolsHeaders = { ...headers };
+  if (sessionId) {
+    toolsHeaders["Mcp-Session-Id"] = sessionId;
+  }
+
+  const toolsResponse = await fetch(mcpUrl, {
+    method: "POST",
+    headers: toolsHeaders,
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/list",
+      params: {},
+    }),
+  });
+
+  let tools: any[] = [];
+
+  if (!toolsResponse.ok) {
+    console.error(
+      "Tools response not ok",
+      toolsResponse.status,
+      await toolsResponse.text()
+    );
+  }
+
+  if (toolsResponse.ok) {
+    const toolsContentType = toolsResponse.headers.get("content-type") || "";
+
+    if (toolsContentType.includes("text/event-stream")) {
+      try {
+        const toolsResult = await parseSSEResponse(toolsResponse);
+        if (
+          toolsResult.result?.tools &&
+          Array.isArray(toolsResult.result.tools)
+        ) {
+          tools = toolsResult.result.tools;
+        }
+      } catch (e) {
+        // Tools list failed, but that's OK - continue without tools
+      }
+    } else {
+      try {
+        const toolsData = await toolsResponse.json();
+        if (toolsData.result?.tools && Array.isArray(toolsData.result.tools)) {
+          tools = toolsData.result.tools;
+        }
+      } catch (e) {
+        // Tools list failed, but that's OK - continue without tools
+      }
+    }
+  }
+
+  return { serverName, tools };
+}
+
+async function parseSSEResponse(response: Response): Promise<any> {
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new Error("No response body");
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+
+      // Keep the last incomplete line in the buffer
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        if (line.startsWith("event: message")) {
+          // Look for the next data line
+          continue;
+        }
+        if (line.startsWith("data: ")) {
+          const jsonStr = line.substring(6);
           try {
             const data = JSON.parse(jsonStr);
-            if (data.result?.serverInfo?.name) {
-              return data.result.serverInfo.name;
+            if (data.result) {
+              return data;
             }
           } catch (e) {
             continue;
@@ -471,14 +620,11 @@ async function extractMCPServerName(
         }
       }
     }
-    throw new Error("Could not extract server name from SSE response");
-  } else {
-    const data = await response.json();
-    if (data.result?.serverInfo?.name) {
-      return data.result.serverInfo.name;
-    }
-    throw new Error("Could not extract server name from JSON response");
+  } finally {
+    reader.releaseLock();
   }
+
+  throw new Error("Could not parse SSE response");
 }
 
 function getMcpStub(env: MCPOAuthEnv, userId: string, versionPrefix?: string) {
@@ -494,7 +640,13 @@ export async function getMCPProviders(
   const mcpProviders = env.MCPProviders.get(
     env.MCPProviders.idFromName(VERSION + userId)
   );
-  return await mcpProviders.getAllProviders();
+  const providers = await mcpProviders.getAllProviders();
+
+  // Parse tools JSON for each provider
+  return providers.map((provider) => ({
+    ...provider,
+    tools: provider.tools ? JSON.parse(provider.tools) : null,
+  }));
 }
 
 // Utility function to get authorization for any URL

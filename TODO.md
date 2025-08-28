@@ -12,23 +12,23 @@
 
 # August 19, 2025
 
-- ✅ Improved UI a lot
+- ✅ Improved UI of https://mcp.p0web.com, a lot
 
 # TODO
 
-- `universal-mcp-oauth`
-  - Update discovery mechanism to draft: https://letmeprompt.com/current-httpsmod-v4jrsv0?key=result
-  - (🟠CONTEXT) Client needs additional check to `.well-known` if www-authenticate wasn't provided: https://github.com/modelcontextprotocol/modelcontextprotocol/issues/985
-  - For text/event-streams, close the initialization automatically after the required message came back, don't wait for more. Same goes for `tools/list`.
-  - `tools/list` function: https://letmeprompt.com/httpsmodelcontext-ap04440?key=result
-  - Upon authorization, list all tools and store these into the DB as well, and return along with servers from the getProviders function
-
-`worker.ts & homepage.html`
-
-- In HTML, when selecting MCPs, allow deselecting tools as well (all selected by default)
-- Put the curl generation in frontend (selection mechanism should update curl)
-- Test against anthropic messages API as well (make that secondary curl upon selection)
-- Allow choosing processor and output text or auto (for simplicity, for now)
+- ✅ `universal-mcp-oauth`
+  - ✅ Update discovery mechanism to draft: https://letmeprompt.com/current-httpsmod-v4jrsv0?key=result
+  - ✅ Client needs additional check to `.well-known` if www-authenticate wasn't provided: https://letmeprompt.com/can-you-summarize-wh-8mi4ai0?key=result
+  - ✅ For text/event-streams, close the initialization automatically after the required message came back, don't wait for more. Same goes for `tools/list`.
+  - ✅ `tools/list` function: https://letmeprompt.com/httpsmodelcontext-ap04440?key=result
+  - ✅ Upon authorization, list all tools and store these into the DB as well, and return along with servers from the getProviders function. NB: tools can just be a JSON blob, no table needed
+- ✅ `worker.ts & homepage.html`
+  - ✅ In HTML, when selecting MCPs, allow deselecting tools as well (all selected by default). the tools are available in the providers.
+  - ✅ Put the curl generation in frontend (selection mechanism should update curl)
+  - ✅ make curl for anthropic messages API as well (uses mcp_servers prop) (make that secondary curl upon selection)
+  - ✅ Allow choosing processor and output text or auto (for simplicity, for now) - see https://docs.parallel.ai/api-reference/task-api-v1/create-task-run.md
+  - ✅ ensure to adopt userData.apiKey (remove userData.hasApiKey)
+  - Fix selection of tools to actually make a different cURL.
 
 After it works, start testing tasks with MCPs and start talking about it!
 
@@ -37,4 +37,6 @@ After it works, start testing tasks with MCPs and start talking about it!
   - maybe adding a proxy (/mcp/proxy/{url}) that performs refresh if token is expired will be best?
   - maybe just expose a function `refreshTokenIfNeeded(provider)` or even `stub.getFreshProviders(mcpUrls:string[]):Promise<MCPProvider[]>`
 - Understand problems with current implementation (https://letmeprompt.com/httpsmodelcontext-o5keiu0)
-- Create Integration-friendly Task API with MCP IDP built-in
+- Create Integration-friendly Task API with MCP IDP built-in (by passing stable `user: string` ID) that instantly responds with a markdown-URL and JSON-URL on which the result will be able to be found without auth (`store:true` indefinitely, `store:false` for 24 hours)
+
+Interesting to read: https://blog.cloudflare.com/zero-trust-mcp-server-portals/ (shared by https://x.com/G4brym/status/1960654316781306069)

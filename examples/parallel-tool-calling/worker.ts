@@ -254,12 +254,7 @@ async function handleLandingPage(
     const config: UserConfig = configJson ? JSON.parse(configJson) : {};
     const apiKey = config.parallelApiKey;
 
-    const userData = {
-      user,
-      providers,
-      hasApiKey: !!apiKey,
-      curlExample: generateCurlExample(providers, apiKey || "YOUR_API_KEY"),
-    };
+    const userData = { user, providers, apiKey };
 
     // Inject data into HTML
     html = html.replace(
@@ -271,40 +266,4 @@ async function handleLandingPage(
   return new Response(html, {
     headers: { "Content-Type": "text/html" },
   });
-}
-
-function generateCurlExample(providers: MCPProvider[], apiKey: string) {
-  const mcpServers = providers.map((provider) => {
-    const server = {
-      type: "url",
-      url: provider.mcp_url,
-      name: provider.name,
-    };
-
-    // Only add headers if provider has access token (not public)
-    if (provider.access_token) {
-      server.headers = {
-        Authorization: `${provider.token_type || "Bearer"} ${
-          provider.access_token
-        }`,
-      };
-    }
-
-    return server;
-  });
-
-  const stringify = (json: any) =>
-    JSON.stringify(json, null, 6).replace(/\n/g, "\n    ");
-
-  return `
-  
-curl -X POST "https://api.parallel.ai/v1/tasks/runs" \\
-  -H "x-api-key: ${apiKey}" \\
-  -H 'content-type: application/json' \\
-  -H "parallel-beta: mcp-server-2025-07-17" \\
-  --data '{
-    "input": "What can you help me with?",
-    "mcp_servers": ${stringify(mcpServers)}
-  }'
-`;
 }

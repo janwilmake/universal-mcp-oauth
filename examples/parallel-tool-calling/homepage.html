@@ -39,6 +39,22 @@
         .font-gerstner {
             font-family: 'Gerstner Programm', 'FT System Mono', monospace;
         }
+
+        .tool-item {
+            margin-left: 1rem;
+            padding: 0.25rem 0;
+        }
+
+        .mcp-provider {
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            padding: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .dark .mcp-provider {
+            border-color: #374151;
+        }
     </style>
     <script>
         tailwind.config = {
@@ -88,19 +104,27 @@
         </div>
     </div>
 
+    <!-- Hidden textarea for copying -->
+    <textarea id="copyBuffer" style="position: absolute; left: -9999px;" readonly></textarea>
+
     <script>
         const urlParams = new URLSearchParams(window.location.search);
         const success = urlParams.get('success');
 
         const usefulMCPs = [
-            { name: "Linear", url: "https://mcp.linear.app/mcp", description: "Task management and issue tracking" },
-            { name: "Notion", url: "https://mcp.notion.com/mcp", description: "Document and workspace management" },
-            { name: "Prisma Postgres", url: "https://mcp.prisma.io/mcp", description: "Database schema management and queries" },
-            { name: "Context7 (Smithery.ai)", url: "https://server.smithery.ai/@upstash/context7-mcp/mcp", description: "Find docs for libraries" },
-            { name: "Hugging Face", url: "https://hf.co/mcp", description: "AI models, datasets, and ML tools" },
-            { name: "Exa", url: "https://mcp.exa.ai/mcp?exaApiKey=your-exa-api-key", description: "Vector Search" },
-            { name: "Reddit (agentic.so)", url: "https://gateway.agentic.so/@agentic/reddit/mcp", description: "Get threads content on Reddit" }
+            { name: "Linear", url: "https://mcp.linear.app/mcp" },
+            { name: "Notion", url: "https://mcp.notion.com/mcp" },
+            { name: "Prisma Postgres", url: "https://mcp.prisma.io/mcp" },
+            { name: "Context7 (Smithery.ai)", url: "https://server.smithery.ai/@upstash/context7-mcp/mcp" },
+            { name: "Hugging Face", url: "https://hf.co/mcp" },
+            { name: "Exa", url: "https://mcp.exa.ai/mcp?exaApiKey=your-exa-api-key" },
+            { name: "Reddit (agentic.so)", url: "https://gateway.agentic.so/@agentic/reddit/mcp" }
         ];
+
+        let selectedProviders = [];
+        let selectedTools = {};
+        let currentProcessor = 'base';
+        let currentOutputType = 'auto';
 
         function addMCPServer() {
             const url = document.getElementById('mcpUrl').value.trim();
@@ -145,7 +169,6 @@
                 .then(data => {
                     if (data.success) {
                         showSuccess('API key updated successfully!');
-                        setTimeout(() => window.location.reload(), 1500);
                     } else {
                         showError('Failed to update API key');
                     }
@@ -153,12 +176,176 @@
                 .catch(err => showError('Failed to update API key: ' + err.message));
         }
 
+        function updateSelectedProviders() {
+            const checkboxes = document.querySelectorAll('.provider-checkbox:checked');
+            selectedProviders = Array.from(checkboxes).map(cb => cb.value);
+            updateSelectedTools();
+        }
+
+        function updateSelectedTools() {
+            selectedTools = {};
+            selectedProviders.forEach(providerId => {
+                const toolCheckboxes = document.querySelectorAll(`.tool-checkbox[data-provider="${providerId}"]:checked`);
+                selectedTools[providerId] = Array.from(toolCheckboxes).map(cb => cb.value);
+            });
+        }
+
+        function onProviderToggle(providerId, checked) {
+            const toolCheckboxes = document.querySelectorAll(`.tool-checkbox[data-provider="${providerId}"]`);
+            toolCheckboxes.forEach(cb => {
+                cb.checked = checked;
+                cb.closest('.tool-item').style.display = checked ? 'block' : 'none';
+            });
+            updateSelectedProviders();
+        }
+
+        function onToolToggle() {
+            updateSelectedTools();
+        }
+
+        function onProcessorChange() {
+            currentProcessor = document.getElementById('processorSelect').value;
+        }
+
+        function onOutputTypeChange() {
+            currentOutputType = document.getElementById('outputTypeSelect').value;
+        }
+
+        function generateParallelCurl() {
+            const { apiKey, providers } = window.userData;
+            if (!apiKey) return 'curl -X POST "https://api.parallel.ai/v1/tasks/runs" \\\n  -H "x-api-key: YOUR_API_KEY" \\\n  -H \'content-type: application/json\' \\\n  -H "parallel-beta: mcp-server-2025-07-17" \\\n  --data \'{\n    "input": "What can you help me with?",\n    "processor": "' + currentProcessor + '",\n    "task_spec": {\n      "output_schema": {\n        "type": "' + currentOutputType + '"' + (currentOutputType === 'text' ? ',\n        "description": "Provide a clear and helpful response"' : '') + '\n      }\n    },\n    "mcp_servers": []\n  }\'';
+
+            if (selectedProviders.length === 0) {
+                return 'curl -X POST "https://api.parallel.ai/v1/tasks/runs" \\\n  -H "x-api-key: ' + apiKey + '" \\\n  -H \'content-type: application/json\' \\\n  -H "parallel-beta: mcp-server-2025-07-17" \\\n  --data \'{\n    "input": "What can you help me with?",\n    "processor": "' + currentProcessor + '",\n    "task_spec": {\n      "output_schema": {\n        "type": "' + currentOutputType + '"' + (currentOutputType === 'text' ? ',\n        "description": "Provide a clear and helpful response"' : '') + '\n      }\n    },\n    "mcp_servers": []\n  }\'';
+            }
+
+            const mcpServers = selectedProviders.map(providerId => {
+                const provider = providers.find(p => p.id === providerId);
+                if (!provider) return null;
+
+                const server = {
+                    type: "url",
+                    url: provider.mcp_url,
+                    name: provider.name,
+                };
+
+                if (selectedTools[providerId] && selectedTools[providerId].length > 0) {
+                    server.allowed_tools = selectedTools[providerId];
+                }
+
+                if (provider.access_token) {
+                    server.headers = {
+                        Authorization: `${provider.token_type || "Bearer"} ${provider.access_token}`,
+                    };
+                }
+
+                return server;
+            }).filter(Boolean);
+
+            const taskSpec = currentOutputType === 'text'
+                ? { output_schema: { type: "text", description: "Provide a clear and helpful response" } }
+                : { output_schema: { type: "auto" } };
+
+            const payload = {
+                input: "What can you help me with?",
+                processor: currentProcessor,
+                task_spec: taskSpec,
+                mcp_servers: mcpServers
+            };
+
+            const stringify = (json) =>
+                JSON.stringify(json, null, 6).replace(/\n/g, "\n    ");
+
+            return `curl -X POST "https://api.parallel.ai/v1/tasks/runs" \\
+  -H "x-api-key: ${apiKey}" \\
+  -H 'content-type: application/json' \\
+  -H "parallel-beta: mcp-server-2025-07-17" \\
+  --data '{
+    ${stringify(payload).slice(1, -1)}
+  }'`;
+        }
+
+        function generateAnthropicCurl() {
+            const { providers } = window.userData;
+            if (selectedProviders.length === 0) {
+                return 'curl -X POST "https://api.anthropic.com/v1/messages" \\\n  -H "x-api-key: $ANTHROPIC_API_KEY" \\\n  -H "anthropic-version: 2023-06-01" \\\n  -H \'content-type: application/json\' \\\n  --data \'{\n    "model": "claude-3-5-sonnet-20241022",\n    "max_tokens": 1024,\n    "messages": [\n      {\n        "role": "user",\n        "content": "What can you help me with?"\n      }\n    ],\n    "mcp_servers": []\n  }\'';
+            }
+
+            const mcpServers = selectedProviders.map(providerId => {
+                const provider = providers.find(p => p.id === providerId);
+                if (!provider) return null;
+
+                const server = {
+                    type: "url",
+                    url: provider.mcp_url,
+                    name: provider.name,
+                };
+
+                if (selectedTools[providerId] && selectedTools[providerId].length > 0) {
+                    server.allowed_tools = selectedTools[providerId];
+                }
+
+                if (provider.access_token) {
+                    server.headers = {
+                        Authorization: `${provider.token_type || "Bearer"} ${provider.access_token}`,
+                    };
+                }
+
+                return server;
+            }).filter(Boolean);
+
+            const payload = {
+                model: "claude-3-5-sonnet-20241022",
+                max_tokens: 1024,
+                messages: [
+                    {
+                        role: "user",
+                        content: "What can you help me with?"
+                    }
+                ],
+                mcp_servers: mcpServers
+            };
+
+            const stringify = (json) =>
+                JSON.stringify(json, null, 6).replace(/\n/g, "\n    ");
+
+            return `curl -X POST "https://api.anthropic.com/v1/messages" \\
+  -H "x-api-key: $ANTHROPIC_API_KEY" \\
+  -H "anthropic-version: 2023-06-01" \\
+  -H 'content-type: application/json' \\
+  --data '{
+    ${stringify(payload).slice(1, -1)}
+  }'`;
+        }
+
+        function copyToClipboard(text, buttonElement) {
+            const copyBuffer = document.getElementById('copyBuffer');
+            copyBuffer.value = text;
+            copyBuffer.select();
+            copyBuffer.setSelectionRange(0, 99999);
+            document.execCommand('copy');
+
+            const originalText = buttonElement.textContent;
+            buttonElement.textContent = 'Copied!';
+            setTimeout(() => {
+                buttonElement.textContent = originalText;
+            }, 1500);
+        }
+
+        function copyParallelCurl(event) {
+            const curl = generateParallelCurl();
+            copyToClipboard(curl, event.target);
+        }
+
+        function copyAnthropicCurl(event) {
+            const curl = generateAnthropicCurl();
+            copyToClipboard(curl, event.target);
+        }
+
         function runTask() {
-            const selectedCheckboxes = document.querySelectorAll('.provider-selector input[type="checkbox"]:checked');
-            const mcpUrls = Array.from(selectedCheckboxes).map(cb => cb.value);
             const input = document.getElementById('taskInput').value.trim();
 
-            if (mcpUrls.length === 0) {
+            if (selectedProviders.length === 0) {
                 showError('Please select at least one MCP server');
                 return;
             }
@@ -168,11 +355,16 @@
                 return;
             }
 
-            // Show loading state
             const button = event.target;
             const originalText = button.textContent;
             button.textContent = 'Executing...';
             button.disabled = true;
+
+            const { providers } = window.userData;
+            const mcpUrls = selectedProviders.map(providerId => {
+                const provider = providers.find(p => p.id === providerId);
+                return provider ? provider.mcp_url : null;
+            }).filter(Boolean);
 
             fetch('/task', {
                 method: 'POST',
@@ -181,7 +373,10 @@
                 },
                 body: JSON.stringify({
                     mcpUrls,
-                    input
+                    input,
+                    processor: currentProcessor,
+                    outputType: currentOutputType,
+                    selectedTools
                 })
             })
                 .then(response => {
@@ -205,6 +400,7 @@
             div.className = 'fixed top-4 right-4 bg-green-100 dark:bg-green-900 border border-green-400 dark:border-green-600 text-green-700 dark:text-green-300 px-4 py-3 rounded z-50';
             div.textContent = message;
             document.body.appendChild(div);
+            setTimeout(() => div.remove(), 3000);
         }
 
         function showError(message) {
@@ -212,13 +408,15 @@
             div.className = 'fixed top-4 right-4 bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-600 text-red-700 dark:text-red-300 px-4 py-3 rounded z-50';
             div.textContent = message;
             document.body.appendChild(div);
+            setTimeout(() => div.remove(), 5000);
         }
 
         function renderUserContent() {
-            const { user, providers, curlExample, hasApiKey } = window.userData;
+            const { user, providers, apiKey } = window.userData;
+            const hasApiKey = !!apiKey;
 
             const datalistOptions = usefulMCPs.map(mcp =>
-                `<option value="${mcp.url}">${mcp.name} - ${mcp.description}</option>`
+                `<option value="${mcp.url}">${mcp.name}</option>`
             ).join('');
 
             document.getElementById('content').innerHTML = `
@@ -289,21 +487,59 @@
                     <div class="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 mb-6">
                         <h3 class="font-gerstner font-medium text-lg mb-4">Execute Task with MCP Tools</h3>
                         
+                        <!-- Processor and Output Type Selection -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label for="processorSelect" class="block text-sm font-medium mb-2">Processor</label>
+                                <select id="processorSelect" onchange="onProcessorChange()" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-parallel-black dark:text-parallel-off-white text-sm">
+                                    <option value="base">Base</option>
+                                    <option value="core">Core</option>
+                                    <option value="pro">Pro</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="outputTypeSelect" class="block text-sm font-medium mb-2">Output Type</label>
+                                <select id="outputTypeSelect" onchange="onOutputTypeChange()" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-parallel-black dark:text-parallel-off-white text-sm">
+                                    <option value="auto">Auto</option>
+                                    <option value="text">Text</option>
+                                </select>
+                            </div>
+                        </div>
+
                         <div class="mb-4">
-                            <label class="block text-sm font-medium mb-2">Select MCP Servers:</label>
-                            <div class="provider-selector space-y-2">
+                            <label class="block text-sm font-medium mb-2">Select MCP Servers and Tools:</label>
+                            <div class="provider-selector space-y-3">
                                 ${providers.map(provider => `
-                                    <label class="flex items-center justify-between p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded group cursor-pointer">
-                                        <div class="flex items-center space-x-2">
-                                            <input type="checkbox" value="${provider.mcp_url}" data-name="${provider.name}" class="accent-parallel-signal">
-                                            <span class="text-sm">${provider.name}</span>
-                                            <span class="text-xs text-gray-500">(${new URL(provider.mcp_url).hostname})</span>
-                                        </div>
-                                        <button onclick="removeMCPServer('${provider.mcp_url}')" 
-                                                class="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 text-xs px-2 py-1 transition-opacity">
-                                            ×
-                                        </button>
-                                    </label>
+                                    <div class="mcp-provider bg-white dark:bg-gray-700">
+                                        <label class="flex items-center justify-between mb-2 cursor-pointer">
+                                            <div class="flex items-center space-x-2">
+                                                <input type="checkbox" value="${provider.id}" class="provider-checkbox accent-parallel-signal" 
+                                                       onchange="onProviderToggle('${provider.id}', this.checked)">
+                                                <span class="text-sm font-medium">${provider.name}</span>
+                                                <span class="text-xs text-gray-500">(${new URL(provider.mcp_url).hostname})</span>
+                                            </div>
+                                            <button onclick="removeMCPServer('${provider.mcp_url}')" 
+                                                    class="text-gray-400 hover:text-red-500 text-xs px-2 py-1">
+                                                ×
+                                            </button>
+                                        </label>
+                                        
+                                        ${provider.tools && provider.tools.length > 0 ? `
+                                            <div class="tools-list">
+                                                ${provider.tools.map(tool => `
+                                                    <div class="tool-item" style="display: none;">
+                                                        <label class="flex items-center space-x-2 cursor-pointer">
+                                                            <input type="checkbox" value="${tool.name}" 
+                                                                   data-provider="${provider.id}" 
+                                                                   class="tool-checkbox accent-parallel-signal text-xs" 
+                                                                   checked onchange="onToolToggle()">
+                                                            <span class="text-xs">${tool.name}</span>
+                                                        </label>
+                                                    </div>
+                                                `).join('')}
+                                            </div>
+                                        ` : '<div class="text-xs text-gray-500 ml-4" style="display: none;">No tools available</div>'}
+                                    </div>
                                 `).join('')}
                             </div>
                         </div>
@@ -327,9 +563,18 @@
                 ${providers.length > 0 ? `
                     <div class="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
                         <h2 class="font-gerstner font-medium text-lg mb-3">Integration Examples</h2>
-                        <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">Use your connected MCP servers with these AI platforms:</p>
-                        <pre class="bg-gray-900 dark:bg-black text-green-400 p-4 rounded text-xs overflow-x-auto border"><code>${curlExample}</code></pre>
-                        <p class="text-xs text-gray-500 mt-3">Replace <code class="bg-gray-200 dark:bg-gray-700 px-1 rounded">$ANTHROPIC_API_KEY</code>, <code class="bg-gray-200 dark:bg-gray-700 px-1 rounded">$PARALLEL_API_KEY</code>, and <code class="bg-gray-200 dark:bg-gray-700 px-1 rounded">$OPENAI_API_KEY</code> with your actual API keys.</p>
+                        <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">Copy curl commands for your selected MCP servers:</p>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <button onclick="copyParallelCurl(event)" class="bg-parallel-signal hover:bg-orange-600 text-white px-4 py-2 rounded font-medium">
+                                Copy Parallel curl
+                            </button>
+                            <button onclick="copyAnthropicCurl(event)" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded font-medium">
+                                Copy Anthropic curl
+                            </button>
+                        </div>
+                        
+                        <p class="text-xs text-gray-500 mt-3">Select MCP servers and tools above to include in the curl commands.</p>
                     </div>
                 ` : ''}
             `;

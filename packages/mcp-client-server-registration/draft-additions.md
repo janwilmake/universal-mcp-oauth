@@ -1,0 +1,2 @@
+- Update discovery mechanism to draft: https://letmeprompt.com/current-httpsmod-v4jrsv0?key=result
+  - Client needs additional check to `.well-known` if www-authenticate wasn't provided: https://letmeprompt.com/can-you-summarize-wh-8mi4ai0?key=result
