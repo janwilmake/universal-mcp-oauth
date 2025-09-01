@@ -26,7 +26,7 @@ Packages
 
 Examples
 
-- [HTML Client](examples/html-client/) (Live at https://mcp.agent-friendly.com)
+- [HTML Client](examples/html-client/) (Live at https://mcp.agent-friendly.com; please note that the frontend-nature of this implementation may result in CORS errors for some servers)
 - [Cloudflare Worker Client](examples/cloudflare-worker/) (Live at https://universal.simplerauth.com)
 - [Parallel Tool Calling with MCP](examples/parallel-tool-calling/) (Live at https://mcp.p0web.com)
 
