@@ -26,7 +26,7 @@ Packages
 
 Examples
 
-- [HTML Client](examples/html-client/) (Live at https://mcp.agent-friendly.com; please note that the frontend-nature of this implementation may result in CORS errors for some servers)
+- [HTML Client](examples/html-client/) (Live at https://mcp.agent-friendly.com)
 - [Cloudflare Worker Client](examples/cloudflare-worker/) (Live at https://universal.simplerauth.com)
 - [Parallel Tool Calling with MCP](examples/parallel-tool-calling/) (Live at https://mcp.p0web.com)
 
@@ -38,6 +38,12 @@ Discuss
 
 - https://x.com/janwilmake/status/1954128444758864160
 - https://x.com/janwilmake/status/1953858441740513390
+
+# About CORS
+
+The MCP Spec doesn't say anything about CORS implementation. Because of this, some MCP servers won't allow all origins, limiting browser implementations from functioning. Implementations like [Claude.ai](https://claude.ai) require frontend-based discoverability, but it's unclear if the registration should also be able to be done from browser-based clients. In the [HTML Client](examples/html-client/) example, I assume the well known files as well as DCR are able to be performed through the browser. Some servers won't allow for this, and it's not clear if this is intended. For a backend-based implementation (that does not encounter this problem) check [Cloudflare Worker Client](examples/cloudflare-worker/)
+
+For more info, see https://letmeprompt.com/specs-well-known-9nx2ll0
 
 # Used Context
 
