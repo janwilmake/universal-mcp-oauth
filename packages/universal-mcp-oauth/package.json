@@ -2,7 +2,13 @@
   "name": "universal-mcp-oauth",
   "version": "0.0.13",
   "main": "universal-mcp-oauth.ts",
+  "files": [
+    "universal-mcp-oauth.ts"
+  ],
   "dependencies": {
-    "mcp-client-server-registration": "^0.0.5"
+    "mcp-client-server-registration": "^0.0.9"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250831.0"
   }
 }

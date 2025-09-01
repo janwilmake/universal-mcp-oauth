@@ -4,5 +4,5 @@
   "compatibility_date": "2025-08-07",
   "dev": { "port": 3000 },
   "assets": { "directory": "./" },
-  "routes": [{ "custom_domain": true, "pattern": "connect.simplerauth.com" }]
+  "routes": [{ "custom_domain": true, "pattern": "mcp.agent-friendly.com" }]
 }

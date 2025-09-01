@@ -30,9 +30,10 @@
   - ✅ ensure to adopt userData.apiKey (remove userData.hasApiKey)
   - Fix selection of tools to actually make a different cURL.
 
+https://cookbook.openai.com/examples/agents_sdk/app_assistant_voice_agents
+
 After it works, start testing tasks with MCPs and start talking about it!
 
-- Fix errors - `{"type":"error","error":{"ref_id":"51f78b52-913c-4198-ad65-eeb176ad6972","message":"Run failed.","detail":null}}`
 - Add refresh token rotation. figure out the best way to do this
   - maybe adding a proxy (/mcp/proxy/{url}) that performs refresh if token is expired will be best?
   - maybe just expose a function `refreshTokenIfNeeded(provider)` or even `stub.getFreshProviders(mcpUrls:string[]):Promise<MCPProvider[]>`

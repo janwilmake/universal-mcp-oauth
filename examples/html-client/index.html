@@ -1,248 +1,394 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
-    <title>OAuth Connector</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCP-Friendly OAuth Checker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
+        .loading {
+            animation: spin 1s linear infinite;
         }
 
-        input,
-        button {
-            padding: 8px;
-            margin: 5px 0;
-            border: 1px solid #ccc;
-            border-radius: 3px;
-        }
-
-        input {
-            width: 300px;
-        }
-
-        button {
-            background: #007bff;
-            color: white;
-            border: none;
-            cursor: pointer;
-        }
-
-        button:hover {
-            background: #0056b3;
-        }
-
-        .connection {
-            border: 1px solid #ddd;
-            padding: 10px;
-            margin: 10px 0;
-            border-radius: 3px;
-        }
-
-        .log {
-            background: #f5f5f5;
-            border: 1px solid #ddd;
-            padding: 10px;
-            margin: 10px 0;
-            font-family: monospace;
-            font-size: 12px;
-            white-space: pre-wrap;
-            max-height: 400px;
-            overflow-y: auto;
-        }
-
-        .auth-link {
-            color: #007bff;
-            text-decoration: underline;
-            cursor: pointer;
-            word-break: break-all;
-        }
-
-        .token {
-            font-family: monospace;
-            background: #f8f9fa;
-            padding: 5px;
-            border: 1px solid #ddd;
-            margin: 5px 0;
-            word-break: break-all;
-        }
-
-        .hidden {
-            display: none;
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
         }
     </style>
 </head>
 
-<body>
-    <h1>OAuth Connector</h1>
-    <input id="host" placeholder="OAuth Server (auth.example.com)">
-    <button onclick="connect()">Connect</button>
-    <div id="status"></div>
-    <div id="connections"></div>
-    <h3>Log</h3>
-    <button onclick="clearLog()">Clear</button>
-    <div id="log" class="log"></div>
+<body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-4xl">
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-900 mb-2">MCP-Friendly OAuth Checker</h1>
+            <p class="text-lg text-gray-600">Check if your MCP server is fully OAuth compatible</p>
+        </div>
 
-    <script>
-        const REDIRECT = 'https://connect.simplerauth.com';
+        <!-- Add MCP Server Form -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h2 class="text-xl font-semibold mb-4">Add MCP Server</h2>
+            <form id="addServerForm" class="space-y-4">
+                <div>
+                    <label for="mcpUrl" class="block text-sm font-medium text-gray-700 mb-2">
+                        MCP Server URL
+                    </label>
+                    <input type="url" id="mcpUrl" list="usefulMCPs"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="https://your-mcp-server.com/mcp" required>
+                    <datalist id="usefulMCPs">
+                        <option value="https://mcp.linear.app/mcp">Linear</option>
+                        <option value="https://mcp.notion.com/mcp">Notion</option>
+                        <option value="https://mcp.prisma.io/mcp">Prisma Postgres</option>
+                        <option value="https://server.smithery.ai/@upstash/context7-mcp/mcp">Context7 (Smithery.ai)
+                        </option>
+                        <option value="https://hf.co/mcp">Hugging Face</option>
+                        <option value="https://mcp.exa.ai/mcp?exaApiKey=your-exa-api-key">Exa</option>
+                        <option value="https://gateway.agentic.so/@agentic/reddit/mcp">Reddit (agentic.so)</option>
+                    </datalist>
+                </div>
+                <button type="submit"
+                    class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors">
+                    Add MCP Server
+                </button>
+            </form>
+        </div>
 
-        onload = () => { handleCallback(); renderConnections(); };
+        <!-- Connected Servers -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold mb-4">Connected MCP Servers</h2>
+            <div id="serversList" class="space-y-4">
+                <p class="text-gray-500 text-center py-8">No servers connected yet</p>
+            </div>
+        </div>
 
-        function log(message) {
-            const logEl = document.getElementById('log');
-            const timestamp = new Date().toLocaleTimeString();
-            logEl.textContent += `[${timestamp}] ${message}\n`;
-            logEl.scrollTop = logEl.scrollHeight;
-        }
+        <!-- Status Messages -->
+        <div id="statusMessages" class="fixed top-4 right-4 z-50"></div>
+    </div>
 
-        function clearLog() {
-            document.getElementById('log').textContent = '';
-        }
+    <script type="module">
+        import {
+            constructMCPAuthorizationUrl,
+            extractMCPServerInfo
+        } from 'https://unpkg.com/mcp-client-server-registration@latest/dist/index.js';
 
-        async function connect() {
-            const host = document.getElementById('host').value.trim();
-            if (!host) return status('Enter hostname');
+        const CLIENT_INFO = {
+            name: "mcp-oauth-checker",
+            title: "MCP-Friendly OAuth Checker",
+            version: "1.0.0"
+        };
 
-            try {
-                log(`Connecting to ${host}...`);
-                status('Fetching metadata...');
+        const CALLBACK_URL = "https://mcp.agent-friendly.com";
 
-                const metaUrl = `https://${host}/.well-known/oauth-authorization-server`;
-                const meta = await fetch(metaUrl).then(r => r.json());
-                log('Got server metadata');
-
-                // we're using post if client_secret was provided after registration
-                const token_endpoint_auth_method = !meta?.token_endpoint_auth_methods_supported ? "client_secret_post" : meta?.token_endpoint_auth_methods_supported?.find(method => method === "none") ? "none" : meta?.token_endpoint_auth_methods_supported?.find(method => method === "client_secret_post") ? "client_secret_post" : undefined;
-
-                status('Registering client...');
-                const client = await fetch(meta.registration_endpoint, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        redirect_uris: [REDIRECT],
-                        client_name: 'OAuth Connector',
-                        grant_types: ['authorization_code'],
-                        token_endpoint_auth_method,
-                        response_types: ['code']
-                    })
-                }).then(r => r.json());
-                log('Client registered');
-
-                const state = Math.random().toString(36).substr(2);
-                const scope = meta.scopes_supported ? meta.scopes_supported.join(' ') : 'openid profile';
-                const authUrl = `${meta.authorization_endpoint}?${new URLSearchParams({
-                    response_type: 'code',
-                    client_id: client.client_id,
-                    redirect_uri: REDIRECT,
-                    state: state,
-                    scope: scope
-                })}`;
-
-                localStorage.setItem(`oauth_state_${state}`, JSON.stringify({ client, meta, state }));
-
-                log(`Auth URL: `);
-                const logEl = document.getElementById('log');
-                const link = document.createElement('span');
-                link.className = 'auth-link';
-                link.textContent = authUrl;
-                link.onclick = () => window.open(authUrl, '_blank');
-                logEl.appendChild(link);
-                logEl.appendChild(document.createTextNode('\n'));
-
-                status('Click auth URL in log');
-
-            } catch (e) {
-                log(`Error: ${e.message}`);
-                status('Failed');
+        class MCPManager {
+            constructor() {
+                this.providers = this.loadProviders();
+                this.init();
             }
-        }
 
-        async function handleCallback() {
-            const params = new URLSearchParams(location.search);
-            const code = params.get('code'), state = params.get('state');
-            if (!code) return;
+            init() {
+                this.renderProviders();
+                this.setupEventListeners();
+                this.handleCallback();
+            }
 
-            log('Processing callback...');
+            loadProviders() {
+                const stored = localStorage.getItem('mcp_providers');
+                return stored ? JSON.parse(stored) : [];
+            }
 
-            const data = JSON.parse(localStorage.getItem(`oauth_state_${state}`) || '{}');
-            if (!data.state) return status('Invalid state');
+            saveProviders() {
+                localStorage.setItem('mcp_providers', JSON.stringify(this.providers));
+            }
 
-            try {
-                const tokenBody = new URLSearchParams({
-                    grant_type: 'authorization_code',
-                    code: code,
-                    redirect_uri: REDIRECT,
-                    client_id: data.client.client_id
+            setupEventListeners() {
+                document.getElementById('addServerForm').addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const mcpUrl = document.getElementById('mcpUrl').value.trim();
+                    await this.addProvider(mcpUrl);
                 });
+            }
 
-                if (data.client.client_secret) {
-                    tokenBody.append('client_secret', data.client.client_secret);
+            async addProvider(mcpUrl) {
+                if (!mcpUrl) return;
+
+                try {
+                    const mcpUrlObj = new URL(mcpUrl);
+                    const hostname = mcpUrlObj.hostname;
+
+                    this.showStatus('Connecting to MCP server...', 'info');
+
+                    const { registrationResponse, authServerMetadata, ...authFlowData } =
+                        await constructMCPAuthorizationUrl(mcpUrl, CALLBACK_URL, CLIENT_INFO);
+
+                    // If no auth is required, add the provider immediately
+                    if (authFlowData.noAuthRequired) {
+                        try {
+                            const { serverName, tools } = await extractMCPServerInfo(CLIENT_INFO, mcpUrl);
+
+                            this.providers.push({
+                                id: Date.now().toString(),
+                                hostname,
+                                name: serverName,
+                                mcp_url: mcpUrl,
+                                created_at: new Date().toISOString(),
+                                public: true,
+                                tools: tools || [],
+                                access_token: null
+                            });
+
+                            this.saveProviders();
+                            this.renderProviders();
+                            this.showStatus('MCP server added successfully!', 'success');
+                            document.getElementById('mcpUrl').value = '';
+
+                        } catch (error) {
+                            this.showStatus(`Failed to get server info: ${error.message}`, 'error');
+                        }
+                    } else {
+                        // Store auth flow data and redirect for OAuth
+                        const authData = {
+                            ...authFlowData,
+                            hostname,
+                            mcpUrl
+                        };
+
+                        localStorage.setItem(`mcp_auth_${hostname}`, JSON.stringify(authData));
+                        this.showStatus('Redirecting to OAuth authorization...', 'info');
+
+                        setTimeout(() => {
+                            window.location.href = authFlowData.authorizationUrl;
+                        }, 1000);
+                    }
+
+                } catch (error) {
+                    this.showStatus(`Failed to add MCP server: ${error.message}`, 'error');
+                }
+            }
+
+            async handleCallback() {
+                const urlParams = new URLSearchParams(window.location.search);
+                const code = urlParams.get('code');
+                const state = urlParams.get('state');
+
+                if (!code || !state) return;
+
+                // Find matching auth data
+                let authData = null;
+                let hostname = null;
+
+                for (const key of Object.keys(localStorage)) {
+                    if (key.startsWith('mcp_auth_')) {
+                        const data = JSON.parse(localStorage.getItem(key));
+                        if (data.state === state) {
+                            authData = data;
+                            hostname = data.hostname;
+                            break;
+                        }
+                    }
                 }
 
-                const token = await fetch(data.meta.token_endpoint, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: tokenBody
-                }).then(r => r.json());
+                if (!authData) {
+                    this.showStatus('Invalid callback state', 'error');
+                    return;
+                }
 
-                const connections = JSON.parse(localStorage.oauth_connections || '{}');
-                const hostname = new URL(data.meta.issuer).hostname;
-                connections[hostname] = {
-                    access_token: token.access_token,
-                    issuer: data.meta.issuer,
-                    expires: token.expires_in ? Date.now() + token.expires_in * 1000 : null,
-                    client_secret: data.client.client_secret || null
+                try {
+                    this.showStatus('Exchanging authorization code for token...', 'info');
+
+                    // Exchange code for token
+                    const tokenData = await this.exchangeCodeForToken(code, authData);
+
+                    if (!tokenData.access_token) {
+                        throw new Error('No access token received');
+                    }
+
+                    // Get server info with token
+                    const { serverName, tools } = await extractMCPServerInfo(
+                        CLIENT_INFO,
+                        authData.mcpUrl,
+                        tokenData.access_token
+                    );
+
+                    // Add provider
+                    this.providers.push({
+                        id: Date.now().toString(),
+                        hostname,
+                        name: serverName,
+                        mcp_url: authData.mcpUrl,
+                        client_id: authData.clientId,
+                        client_secret: authData.clientSecret,
+                        access_token: tokenData.access_token,
+                        token_type: tokenData.token_type || 'Bearer',
+                        expires_at: tokenData.expires_in ? Date.now() + (tokenData.expires_in * 1000) : null,
+                        created_at: new Date().toISOString(),
+                        public: false,
+                        tools: tools || []
+                    });
+
+                    this.saveProviders();
+                    this.renderProviders();
+
+                    // Clean up
+                    localStorage.removeItem(`mcp_auth_${hostname}`);
+
+                    // Clean URL
+                    window.history.replaceState({}, document.title, window.location.pathname);
+
+                    this.showStatus('MCP server connected successfully!', 'success');
+
+                } catch (error) {
+                    this.showStatus(`OAuth callback failed: ${error.message}`, 'error');
+                    localStorage.removeItem(`mcp_auth_${hostname}`);
+                }
+            }
+
+            async exchangeCodeForToken(code, authData) {
+                const tokenRequestBody = new URLSearchParams({
+                    grant_type: 'authorization_code',
+                    code,
+                    redirect_uri: CALLBACK_URL,
+                    client_id: authData.clientId,
+                    code_verifier: authData.codeVerifier,
+                    resource: authData.mcpUrl
+                });
+
+                if (authData.clientSecret) {
+                    tokenRequestBody.append('client_secret', authData.clientSecret);
+                }
+
+                const response = await fetch(authData.tokenEndpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'Accept': 'application/json'
+                    },
+                    body: tokenRequestBody
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`${response.status} ${errorText}`);
+                }
+
+                return await response.json();
+            }
+
+            removeProvider(id) {
+                this.providers = this.providers.filter(p => p.id !== id);
+                this.saveProviders();
+                this.renderProviders();
+                this.showStatus('MCP server removed', 'success');
+            }
+
+            copyAccessToken(token) {
+                navigator.clipboard.writeText(token).then(() => {
+                    this.showStatus('Access token copied to clipboard!', 'success');
+                }).catch(() => {
+                    this.showStatus('Failed to copy access token', 'error');
+                });
+            }
+
+            renderProviders() {
+                const container = document.getElementById('serversList');
+
+                if (this.providers.length === 0) {
+                    container.innerHTML = '<p class="text-gray-500 text-center py-8">No servers connected yet</p>';
+                    return;
+                }
+
+                container.innerHTML = this.providers.map(provider => {
+                    const isExpired = provider.expires_at && Date.now() > provider.expires_at;
+                    const hasToken = provider.access_token && !isExpired;
+
+                    return `
+                        <div class="border border-gray-200 rounded-lg p-4">
+                            <div class="flex justify-between items-start mb-3">
+                                <div>
+                                    <h3 class="font-semibold text-lg">${provider.name}</h3>
+                                    <p class="text-gray-600 text-sm">${provider.mcp_url}</p>
+                                    <p class="text-gray-500 text-xs">Added: ${new Date(provider.created_at).toLocaleString()}</p>
+                                </div>
+                                <div class="flex gap-2">
+                                    ${hasToken ? `
+                                        <button 
+                                            onclick="mcpManager.copyAccessToken('${provider.access_token}')"
+                                            class="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700"
+                                        >
+                                            Copy Token
+                                        </button>
+                                    ` : ''}
+                                    <button 
+                                        onclick="mcpManager.removeProvider('${provider.id}')"
+                                        class="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700"
+                                    >
+                                        Remove
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="flex items-center gap-4 mb-3">
+                                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${provider.public ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
+                        }">
+                                    ${provider.public ? 'No Auth Required' : 'OAuth Protected'}
+                                </span>
+                                
+                                ${hasToken ? `
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                        ✓ Authenticated
+                                    </span>
+                                ` : isExpired ? `
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                        Token Expired
+                                    </span>
+                                ` : ''}
+                            </div>
+
+                            ${provider.tools && provider.tools.length > 0 ? `
+                                <div>
+                                    <h4 class="font-medium text-sm mb-2">Available Tools (${provider.tools.length}):</h4>
+                                    <div class="flex flex-wrap gap-1">
+                                        ${provider.tools.slice(0, 5).map(tool =>
+                            `<span class="inline-flex items-center px-2 py-1 rounded-md text-xs bg-gray-100 text-gray-800">${tool.name}</span>`
+                        ).join('')}
+                                        ${provider.tools.length > 5 ? `<span class="text-xs text-gray-500">+${provider.tools.length - 5} more</span>` : ''}
+                                    </div>
+                                </div>
+                            ` : `
+                                <p class="text-gray-500 text-sm">No tools information available</p>
+                            `}
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            showStatus(message, type = 'info') {
+                const container = document.getElementById('statusMessages');
+                const id = 'status_' + Date.now();
+
+                const colors = {
+                    success: 'bg-green-500',
+                    error: 'bg-red-500',
+                    info: 'bg-blue-500'
                 };
 
-                localStorage.oauth_connections = JSON.stringify(connections);
-                localStorage.removeItem(`oauth_state_${state}`);
+                const statusEl = document.createElement('div');
+                statusEl.id = id;
+                statusEl.className = `${colors[type]} text-white px-4 py-2 rounded-md shadow-lg mb-2 max-w-sm`;
+                statusEl.textContent = message;
 
-                log(`Connected to ${hostname}`);
-                history.replaceState({}, '', location.pathname);
-                status('Connected');
-                renderConnections();
+                container.appendChild(statusEl);
 
-            } catch (e) {
-                log(`Token error: ${e.message}`);
-                status('Token failed');
+                setTimeout(() => {
+                    const el = document.getElementById(id);
+                    if (el) el.remove();
+                }, 5000);
             }
         }
 
-        function renderConnections() {
-            const connections = JSON.parse(localStorage.oauth_connections || '{}');
-            const connectionsEl = document.getElementById('connections');
-
-            if (Object.keys(connections).length === 0) {
-                connectionsEl.innerHTML = '<p>No connections</p>';
-                return;
-            }
-
-            connectionsEl.innerHTML = Object.entries(connections).map(([host, info]) => {
-                const tokenId = `token_${host.replace(/\./g, '_')}`;
-                return `<div class="connection">
-                    <h4>${host}</h4>
-                    <p>Issuer: ${info.issuer}</p>
-                    <p>Expires: ${info.expires ? new Date(info.expires).toLocaleString() : 'Unknown'}</p>
-                    ${info.client_secret ? `<p>Client Secret: ${info.client_secret}</p>` : ''}
-                    <button onclick="document.getElementById('${tokenId}').classList.toggle('hidden')">Toggle Token</button>
-                    <div id="${tokenId}" class="token hidden">${info.access_token}</div>
-                    <button onclick="logout('${host}')">Logout</button>
-                </div>`;
-            }).join('');
-        }
-
-        function logout(host) {
-            const connections = JSON.parse(localStorage.oauth_connections || '{}');
-            delete connections[host];
-            localStorage.oauth_connections = JSON.stringify(connections);
-            renderConnections();
-            log(`Logged out from ${host}`);
-        }
-
-        function status(msg) {
-            document.getElementById('status').textContent = msg;
-            if (msg !== 'Connected') setTimeout(() => document.getElementById('status').textContent = '', 3000);
-        }
+        // Initialize the MCP Manager
+        window.mcpManager = new MCPManager();
     </script>
 </body>
 

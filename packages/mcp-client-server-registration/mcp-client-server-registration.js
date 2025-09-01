@@ -231,7 +231,11 @@ export async function constructMCPAuthorizationUrl(
       });
 
       if (!regResponse.ok) {
-        throw new Error(`Client registration failed: ${regResponse.status}`);
+        throw new Error(
+          `Client registration failed: ${
+            regResponse.status
+          } - ${await regResponse.text?.()}`
+        );
       }
 
       registrationResponse = await regResponse.json();
@@ -353,4 +357,194 @@ async function discoverAuthServerMetadata(issuerUrl) {
       ", "
     )}`
   );
+}
+
+/**
+ * Extracts server information and tools from an MCP server
+ * @param {{name: string; title: string; version: string}} clientInfo - Client information
+ * @param {string} mcpUrl - The MCP server URL
+ * @param {string} [accessToken] - Optional access token for authenticated requests
+ * @returns {Promise<{serverName: string; tools: any[]}>} Server name and available tools
+ * @throws {Error} When server request fails or server name cannot be extracted
+ */
+export async function extractMCPServerInfo(clientInfo, mcpUrl, accessToken) {
+  const headers = {
+    "Content-Type": "application/json",
+    Accept: "application/json,text/event-stream",
+    "MCP-Protocol-Version": "2025-06-18", // Add protocol version header
+  };
+
+  if (accessToken) {
+    headers.Authorization = `Bearer ${accessToken}`;
+  }
+
+  // First, initialize the connection
+  const initResponse = await fetch(mcpUrl, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-06-18",
+        capabilities: {
+          roots: { listChanged: true },
+          sampling: {},
+        },
+        clientInfo,
+      },
+    }),
+  });
+
+  if (!initResponse.ok) {
+    throw new Error(
+      `MCP server request to ${mcpUrl} failed (access token: ${
+        accessToken || "None"
+      }): ${initResponse.status} - ${await initResponse.text()} `
+    );
+  }
+
+  // Extract session ID from the initialization response
+  const sessionId = initResponse.headers.get("Mcp-Session-Id");
+
+  const contentType = initResponse.headers.get("content-type") || "";
+  let serverName;
+
+  if (contentType.includes("text/event-stream")) {
+    const initResult = await parseSSEResponse(initResponse);
+    if (!initResult.result?.serverInfo?.name) {
+      throw new Error("Could not extract server name from SSE response");
+    }
+    serverName = initResult.result.serverInfo.name;
+  } else {
+    const initData = await initResponse.json();
+    if (!initData.result?.serverInfo?.name) {
+      throw new Error("Could not extract server name from JSON response");
+    }
+    serverName = initData.result.serverInfo.name;
+  }
+
+  // Send initialized notification with session ID if provided
+  if (sessionId) {
+    const initializedHeaders = { ...headers };
+    initializedHeaders["Mcp-Session-Id"] = sessionId;
+
+    await fetch(mcpUrl, {
+      method: "POST",
+      headers: initializedHeaders,
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        method: "initialized",
+        params: {},
+      }),
+    });
+  }
+
+  // Now get the tools list with session ID
+  const toolsHeaders = { ...headers };
+  if (sessionId) {
+    toolsHeaders["Mcp-Session-Id"] = sessionId;
+  }
+
+  const toolsResponse = await fetch(mcpUrl, {
+    method: "POST",
+    headers: toolsHeaders,
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/list",
+      params: {},
+    }),
+  });
+
+  let tools = [];
+
+  if (!toolsResponse.ok) {
+    console.error(
+      "Tools response not ok",
+      toolsResponse.status,
+      await toolsResponse.text()
+    );
+  }
+
+  if (toolsResponse.ok) {
+    const toolsContentType = toolsResponse.headers.get("content-type") || "";
+
+    if (toolsContentType.includes("text/event-stream")) {
+      try {
+        const toolsResult = await parseSSEResponse(toolsResponse);
+        if (
+          toolsResult.result?.tools &&
+          Array.isArray(toolsResult.result.tools)
+        ) {
+          tools = toolsResult.result.tools;
+        }
+      } catch (e) {
+        // Tools list failed, but that's OK - continue without tools
+      }
+    } else {
+      try {
+        const toolsData = await toolsResponse.json();
+        if (toolsData.result?.tools && Array.isArray(toolsData.result.tools)) {
+          tools = toolsData.result.tools;
+        }
+      } catch (e) {
+        // Tools list failed, but that's OK - continue without tools
+      }
+    }
+  }
+
+  return { serverName, tools };
+}
+
+/**
+ * Parses Server-Sent Events (SSE) response from MCP server
+ * @param {Response} response - The fetch Response object with SSE content
+ * @returns {Promise<any>} Parsed JSON data from the SSE stream
+ * @throws {Error} When response body is unavailable or parsing fails
+ */
+async function parseSSEResponse(response) {
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new Error("No response body");
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+
+      // Keep the last incomplete line in the buffer
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        if (line.startsWith("event: message")) {
+          // Look for the next data line
+          continue;
+        }
+        if (line.startsWith("data: ")) {
+          const jsonStr = line.substring(6);
+          try {
+            const data = JSON.parse(jsonStr);
+            if (data.result) {
+              return data;
+            }
+          } catch (e) {
+            continue;
+          }
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  throw new Error("Could not parse SSE response");
 }
