@@ -26,7 +26,7 @@ Packages
 
 Examples
 
-- [HTML Client (uses slightly incorrect, older version)](examples/html-client/)
+- [HTML Client](examples/html-client/) (Live at https://mcp.agent-friendly.com)
 - [Cloudflare Worker](examples/cloudflare-worker/)
 - [Parallel Tool Calling with MCP (coming soon)](examples/parallel-tool-calling/)
 
