@@ -27,8 +27,8 @@ Packages
 Examples
 
 - [HTML Client](examples/html-client/) (Live at https://mcp.agent-friendly.com)
-- [Cloudflare Worker](examples/cloudflare-worker/)
-- [Parallel Tool Calling with MCP (coming soon)](examples/parallel-tool-calling/)
+- [Cloudflare Worker Client](examples/cloudflare-worker/) (Live at https://universal.simplerauth.com)
+- [Parallel Tool Calling with MCP](examples/parallel-tool-calling/) (Live at https://mcp.p0web.com)
 
 Dependencies to examples
 
