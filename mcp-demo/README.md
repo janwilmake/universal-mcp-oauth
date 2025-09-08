@@ -10,4 +10,4 @@ It can be tested locally:
 
 DEMO:
 
-![](demo.gif)
+![](small.gif)
