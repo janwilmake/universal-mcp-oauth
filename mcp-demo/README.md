@@ -1,4 +1,4 @@
-This demo exposes an MCP that uses X as OAuth Provider.
+This demo exposes an MCP that uses X as OAuth Provider without having to configure any environment variables.
 
 It can be tested locally:
 
