@@ -1,0 +1,12 @@
+{
+  "$schema": "https://unpkg.com/wrangler@latest/config-schema.json",
+  "name": "mcp-demo",
+  "compatibility_date": "2025-08-16",
+  "main": "demo.ts",
+  "dev": { "port": 3000 },
+  "env": {
+    "production": {
+      "route": { "custom_domain": true, "pattern": "mcpdemo.wilmake.com" }
+    }
+  }
+}
