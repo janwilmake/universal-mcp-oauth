@@ -2,5 +2,8 @@
   "dependencies": {
     "simplerauth-client": "^0.0.13",
     "with-mcp": "^0.0.12"
+  },
+  "scripts": {
+    "gif": "ffmpeg -i input.mov -vf \"setpts=0.5*PTS,fps=10,scale=1024:-1\" output.gif"
   }
 }
