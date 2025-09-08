@@ -22,11 +22,11 @@ DEMO:
 
 🤔 Now, simplerauth-client successfully works as client, but also must be a valid provider for an MCP server! This part is still untested and we must be able to test this **fully locally**. The provider will be at http://localhost:3000
 
-❗️ Create demo that uses `x-oauth-provider`, `simplerauth-client` and `with-mcp`, then test this with `npx @modelcontextprotocol/inspector` fully locally.
+✅ Create demo that uses `x-oauth-provider`, `simplerauth-client` and `with-mcp`, then test this with `npx @modelcontextprotocol/inspector` fully locally.
 
 Successfully go through Entire OAuth flow with:
 
-- mcp inspector
+- ✅ mcp inspector
 - mcp-client-server-registration (make simple UI that also works locally)
 - deploy it all, then try at Claude.ai
 
