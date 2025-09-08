@@ -1,47 +1,22 @@
-# August 13, 2025
-
-- ✅ Exchange https://github.com/janwilmake/simplerauth-provider-test with https://github.com/janwilmake/x-oauth-client-provider
-- ✅ Test adding servers, see if it works here too
-- ✅ Create a separate HTML with a directory of supported MCPs so we can use click-to-login, not having to fill the url per-se
-- ✅ Ensure removing the provider again works too
-- ✅ Researched and found the proper flow for mcp oauth (which can also be used for regular oauth!)
-- ✅ Improve this by adopting https://uithub.com/janwilmake/universal-mcp-oauth/tree/main/mcp-client-server-registration
-- ✅ Find a way to make `universal-mcp-oauth` very pluggable so people can make apps with this pattern more easily.
-- ✅ Create parallel recipe for tasks that use MCPs ([parallel-tool-calling](examples/parallel-tool-calling/))
-- ✅ Test for examples, fix 404: `Token exchange failed: MCP server request failed: 404`. Update README about limitations
-
-# August 19, 2025
-
-- ✅ Improved UI of https://mcp.p0web.com, a lot
-
-# Late August 2025
-
-- ✅ `universal-mcp-oauth`
-  - ✅ Update discovery mechanism to draft: https://letmeprompt.com/current-httpsmod-v4jrsv0?key=result
-  - ✅ Client needs additional check to `.well-known` if www-authenticate wasn't provided: https://letmeprompt.com/can-you-summarize-wh-8mi4ai0?key=result
-  - ✅ For text/event-streams, close the initialization automatically after the required message came back, don't wait for more. Same goes for `tools/list`.
-  - ✅ `tools/list` function: https://letmeprompt.com/httpsmodelcontext-ap04440?key=result
-  - ✅ Upon authorization, list all tools and store these into the DB as well, and return along with servers from the getProviders function. NB: tools can just be a JSON blob, no table needed
-- ✅ `worker.ts & homepage.html`
-  - ✅ In HTML, when selecting MCPs, allow deselecting tools as well (all selected by default). the tools are available in the providers.
-  - ✅ Put the curl generation in frontend (selection mechanism should update curl)
-  - ✅ make curl for anthropic messages API as well (uses mcp_servers prop) (make that secondary curl upon selection)
-  - ✅ Allow choosing processor and output text or auto (for simplicity, for now) - see https://docs.parallel.ai/api-reference/task-api-v1/create-task-run.md
-  - ✅ ensure to adopt userData.apiKey (remove userData.hasApiKey)
-
 # Goal This Weekend - Fix MCP login
 
 ✅ Added ability to develop `simplerauth-client` + `x-oauth-provider` on localhost (refactor secure flag and url.origin)
 
+✅ Moved everything into the universal-mcp-oauth repo. removed https://github.com/janwilmake/simplerauth.cloudflare for now!
+
 🤔 Now, simplerauth-client successfully works as client, but also must be a valid provider for an MCP server! This part is still untested and we must be able to test this **fully locally**. The provider will be at http://localhost:3000
 
-Successfully go through Entire OAuth flow with SimplerAuth Client, be able to have the Claude.ai client log into Markdownfeed MCP, Curl MCP, OpenAPI MCP Server. Host these all!
+❗️ Create demo that uses `simplerauth-client` and `with-mcp`, then test this with `npx @modelcontextprotocol/inspector` fully locally.
 
-❗️ Now, I'm getting: `{"error":"invalid_token","error_description":"Token not found or expired"}` for `/authorize` if done from https://mcp.p0web.com. Am I calling the endpoint correctly? Go over the code here.
+Successfully go through Entire OAuth flow with:
 
-Let's look in the database if things are done correctly and if every error is logged.
+- mcp inspector
+- mcp-client-server-registration (make simple UI that also works locally)
+- deploy it all, then try at Claude.ai
 
-Use latest X OAuth provider at `markdownfeed`. Confirm `x-oauth-provider` is complete and functional now. Test it with `npx @modelcontextprotocol/inspector` and https://mcp.agent-friendly.com
+❗️ Now, I'm getting: `{"error":"invalid_token","error_description":"Token not found or expired"}` for `/authorize` if done from https://mcp.p0web.com. Am I calling the endpoint correctly? Go over the code here. Let's look in the database if things are done correctly and if every error is logged.
+
+After it works, deploy Markdownfeed MCP, Curl MCP, OpenAPI MCP Server with these new versions.
 
 🔥🔥🔥🔥 After I have this.... I can finally ship MCPs with login. Add `withMcp` to `flaredream-user-worker` and start shipping `agent-friendly` workers. 🔥🔥🔥🔥
 
