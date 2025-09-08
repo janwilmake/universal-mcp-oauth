@@ -5,5 +5,8 @@
   },
   "scripts": {
     "gif": "ffmpeg -i input.mov -vf \"setpts=0.5*PTS,fps=10,scale=1024:-1\" output.gif"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250906.0"
   }
 }

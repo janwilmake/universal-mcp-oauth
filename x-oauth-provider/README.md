@@ -18,6 +18,10 @@ This X OAuth Provider uses the client's domain name as the client_id and automat
 - Uses [DORM](https://github.com/janwilmake/dorm) to expose admin panel with all users in aggregate (readonly) without compromising on performance (each user gets their own DO as source of truth)
 - Users that are already logged in won't be redirected to X Again, even from other clients.
 
+**Run locally**
+
+`wrangler dev --env localhost` (needed in order to have localhost with correct port as hostname)
+
 **3 ways to use it**
 
 1. **Hosted** - Use directly from https://login.wilmake.com

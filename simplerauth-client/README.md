@@ -1,5 +1,10 @@
 # SimplerAuth Provider - Zero-Config OAuth Clients & Providers
 
+# Usage
+
+- `cp .env.example .env`
+- `wrangler dev`
+
 # Features simplerauth-client
 
 - Wrap your fetch handler with `withSimplerAuth(handler,config)` and you'll have access to `ctx.user`. That's literally it!

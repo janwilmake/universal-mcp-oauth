@@ -28,8 +28,8 @@ export interface SimplerAuthConfig {
   scope?: string;
   /** Cookie SameSite setting */
   sameSite?: "Strict" | "Lax";
-  /** The OAuth provider hostname (defaults to login.wilmake.com) */
-  providerHostname?: string;
+  /** The OAuth provider host (defaults to login.wilmake.com, which provides x oauth) */
+  oauthProviderHost?: string;
 }
 
 /**
@@ -43,13 +43,13 @@ export function withSimplerAuth<TEnv = {}>(
     isLoginRequired = false,
     scope = "profile",
     sameSite = "Lax",
-    providerHostname = "login.wilmake.com",
+    oauthProviderHost = "login.wilmake.com",
   } = config;
 
-  const providerProtocol = providerHostname.startsWith("localhost:")
+  const providerProtocol = oauthProviderHost.startsWith("localhost:")
     ? "http"
     : "https";
-  const providerOrigin = `${providerProtocol}://${providerHostname}`;
+  const providerOrigin = `${providerProtocol}://${oauthProviderHost}`;
 
   return async (
     request: Request,
