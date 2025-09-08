@@ -118,3 +118,21 @@ NOT FINE https://x.com/i/oauth2/authorize?response_type=code&client_id=MWlyVUFQW
 The problem seems to be that there's a max length of 500 characters to the state param.
 
 ✅ Solved by removing redirect_to from encoded state and putting that in a cookie instead
+
+# Fix MCP login (2025-09-08)
+
+✅ Added ability to develop `simplerauth-client` + `x-oauth-provider` on localhost (refactor secure flag and url.origin)
+
+✅ Moved everything into the universal-mcp-oauth repo. removed https://github.com/janwilmake/simplerauth.cloudflare for now!
+
+🤔 Now, simplerauth-client successfully works as client, but also must be a valid provider for an MCP server! This part is still untested and we must be able to test this **fully locally**. The provider will be at http://localhost:3000
+
+✅ Create demo that uses `x-oauth-provider`, `simplerauth-client` and `with-mcp`, then test this with `npx @modelcontextprotocol/inspector` fully locally.
+
+🟠 Successfully go through Entire OAuth flow with:
+
+1. ✅ mcp inspector
+2. ✅ mcp-client-server-registration (make simple UI that also works locally)
+3. ✅ deploy it all, then try at Claude.ai
+
+✅ TEST WITH `mcp-client-server-registration` html-client:❗️ Now, I'm getting: `{"error":"invalid_token","error_description":"Token not found or expired"}` for `/authorize` if done from https://mcp.p0web.com. Am I calling the endpoint correctly? Go over the code here. Let's look in the database if things are done correctly and if every error is logged. 🎉🎉🎉🎉🎉🎉fixed fixed fixed omg omg omg🎉🎉🎉🎉🎉

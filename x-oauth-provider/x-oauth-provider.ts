@@ -8,7 +8,7 @@ import {
   studioMiddleware,
 } from "queryable-object";
 
-const USER_DO_PREFIX = "user-v5:";
+const USER_DO_PREFIX = "user-v6:";
 
 export interface Env {
   SELF_CLIENT_ID: string;
@@ -362,79 +362,6 @@ export class UserDO extends DurableObject {
       user,
       xAccessToken: result.x_access_token as string,
     };
-  }
-
-  async getUserByAccessToken(accessToken: string): Promise<{
-    user: XUser;
-    xAccessToken: string;
-    clientId: string;
-  } | null> {
-    try {
-      // Decrypt the access token to get user_id, client_id, and x_access_token
-      if (!accessToken.startsWith("simple_")) {
-        return null;
-      }
-
-      const encryptedData = accessToken.substring(7); // Remove 'simple_' prefix
-      const decryptedData = await decrypt(
-        encryptedData,
-        this.env.ENCRYPTION_SECRET
-      );
-      const [userId, resource, xAccessToken] = decryptedData.split(";");
-      // Derive client_id from resource
-      const clientId = new URL(resource).hostname;
-      // Verify login exists
-      const loginResult = this.sql
-        .exec(
-          `SELECT * FROM logins WHERE access_token = ? AND user_id = ? AND client_id = ?`,
-          accessToken,
-          userId,
-          clientId
-        )
-        .toArray()[0];
-
-      if (!loginResult) {
-        console.log("no login result", { clientId, accessToken, userId });
-
-        return null;
-      }
-
-      // Get user data
-      const userResult = this.sql
-        .exec(`SELECT * FROM users WHERE user_id = ?`, userId)
-        .toArray()[0];
-
-      if (!userResult) {
-        console.log("no user result");
-        return null;
-      }
-
-      // Reconstruct user object
-      const additionalData = JSON.parse(
-        (userResult.additional_data as string) || "{}"
-      );
-      const user: XUser = {
-        id: userResult.user_id as string,
-        name: userResult.name as string,
-        username: userResult.username as string,
-        ...(userResult.profile_image_url && {
-          profile_image_url: userResult.profile_image_url as string,
-        }),
-        ...(userResult.verified && {
-          verified: userResult.verified as boolean,
-        }),
-        ...additionalData,
-      };
-
-      return {
-        user,
-        xAccessToken,
-        clientId,
-      };
-    } catch (error) {
-      console.error("Error decrypting access token:", error);
-      return null;
-    }
   }
 
   async setMetadata<T>(metadata: T) {
@@ -846,7 +773,7 @@ async function handleMe(
     // Update activity before getting user data
     await userDO.updateActivity(accessToken);
 
-    const userData = await userDO.getUserByAccessToken(accessToken);
+    const userData = await userDO.getUserWithAccessToken(userId);
 
     if (!userData) {
       return new Response(
@@ -1816,7 +1743,7 @@ export function withSimplerAuth<TEnv = {}, TMetadata = { [key: string]: any }>(
           await userDO.updateActivity(accessToken);
         }
 
-        const userData = await userDO.getUserByAccessToken(accessToken);
+        const userData = await userDO.getUserWithAccessToken(userId);
 
         if (userData) {
           user = userData.user as unknown as XUser;
