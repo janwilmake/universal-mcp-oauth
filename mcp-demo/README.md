@@ -5,6 +5,7 @@ It can be tested locally:
 - In `x-oauth-provider`, run `wrangler dev --env localhost` (exposes x oauth provider proxy on port 8787)
 - Here, run `wrangler dev` to expose the MCP at http://localhost:3000/mcp
 - In a third terminal, run `npx @modelcontextprotocol/inspector` to open the MCP inspector.
+- To demonstrate our registration flow is functional as well, you can test [html-client](../html-client/) using `wrangler dev` (exposes browser-client on 3001 that performs oauth flow)
 
 ![](demo.drawio.png)
 
@@ -24,13 +25,13 @@ DEMO:
 
 ✅ Create demo that uses `x-oauth-provider`, `simplerauth-client` and `with-mcp`, then test this with `npx @modelcontextprotocol/inspector` fully locally.
 
-Successfully go through Entire OAuth flow with:
+🟠 Successfully go through Entire OAuth flow with:
 
-- ✅ mcp inspector
-- mcp-client-server-registration (make simple UI that also works locally)
-- deploy it all, then try at Claude.ai
+1. ✅ mcp inspector
+2. mcp-client-server-registration (make simple UI that also works locally)
+3. deploy it all, then try at Claude.ai
 
-❗️ Now, I'm getting: `{"error":"invalid_token","error_description":"Token not found or expired"}` for `/authorize` if done from https://mcp.p0web.com. Am I calling the endpoint correctly? Go over the code here. Let's look in the database if things are done correctly and if every error is logged.
+TEST WITH `mcp-client-server-registration` html-client:❗️ Now, I'm getting: `{"error":"invalid_token","error_description":"Token not found or expired"}` for `/authorize` if done from https://mcp.p0web.com. Am I calling the endpoint correctly? Go over the code here. Let's look in the database if things are done correctly and if every error is logged.
 
 After it works, deploy Markdownfeed MCP, Curl MCP, OpenAPI MCP Server with these new versions.
 

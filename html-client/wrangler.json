@@ -4,5 +4,9 @@
   "compatibility_date": "2025-08-07",
   "dev": { "port": 3001 },
   "assets": { "directory": "./" },
-  "routes": [{ "custom_domain": true, "pattern": "mcp.agent-friendly.com" }]
+  "env": {
+    "production": {
+      "routes": [{ "custom_domain": true, "pattern": "mcp.agent-friendly.com" }]
+    }
+  }
 }

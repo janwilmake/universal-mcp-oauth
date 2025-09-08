@@ -7,6 +7,7 @@
   "vars": { "PORT": "3000", "OAUTH_PROVIDER_HOST": "localhost:8787" },
   "env": {
     "production": {
+      "vars": { "PORT": "3000" },
       "route": { "custom_domain": true, "pattern": "mcpdemo.wilmake.com" }
     }
   }
