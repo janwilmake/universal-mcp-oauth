@@ -4,6 +4,7 @@
   "compatibility_date": "2025-08-16",
   "main": "demo.ts",
   "dev": { "port": 3000 },
+  "vars": { "PORT": "3000", "OAUTH_PROVIDER_HOST": "localhost:8787" },
   "env": {
     "production": {
       "route": { "custom_domain": true, "pattern": "mcpdemo.wilmake.com" }

@@ -3,7 +3,7 @@ This demo exposes an MCP that uses X as OAuth Provider without having to configu
 It can be tested locally:
 
 - In `x-oauth-provider`, run `wrangler dev --env localhost` (exposes x oauth provider proxy on port 8787)
-- Here, first `cp .env.example .env`; then, run `wrangler dev` to expose the MCP at http://localhost:3000/mcp
+- Here, run `wrangler dev` to expose the MCP at http://localhost:3000/mcp
 - In a third terminal, run `npx @modelcontextprotocol/inspector` to open the MCP inspector.
 
 ![](demo.drawio.png)
