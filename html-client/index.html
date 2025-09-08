@@ -269,7 +269,7 @@
 
                 if (!response.ok) {
                     const errorText = await response.text();
-                    throw new Error(`${response.status} ${errorText}`);
+                    throw new Error(`Token exchange failed: ${response.status} ${errorText}`);
                 }
 
                 return await response.json();

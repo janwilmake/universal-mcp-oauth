@@ -1,0 +1,18 @@
+{
+  "name": "x-oauth-provider",
+  "version": "0.0.24",
+  "files": [
+    "x-oauth-provider.ts"
+  ],
+  "scripts": {
+    "dev": "wrangler dev --env localhost"
+  },
+  "main": "x-oauth-provider.ts",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250813.0"
+  },
+  "dependencies": {
+    "multistub": "^0.0.8",
+    "queryable-object": "^0.0.8"
+  }
+}
