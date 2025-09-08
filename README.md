@@ -34,7 +34,7 @@ Universal MCP OAuth Flow Implementations
 
 - [HTML Client](html-client/) (Live at https://mcp.agent-friendly.com)
 - [Parallel Tool Calling with MCP](parallel-tool-calling/) (Live at https://mcp.p0web.com)
-- [Cloudflare Worker](cloudflare-worker/) -
+- [Cloudflare Worker](cloudflare-worker/) - Same as parallel-tool-calling
 
 Packages
 
