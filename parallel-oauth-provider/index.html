@@ -159,6 +159,20 @@
             font-weight: 500;
             margin-right: 12px;
         }
+
+        .registration-info {
+            background: rgba(216, 208, 191, 0.1);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 24px;
+            font-size: 14px;
+            text-align: left;
+        }
+
+        .registration-info h3 {
+            margin-bottom: 8px;
+            color: #fb631b;
+        }
     </style>
 </head>
 
@@ -166,19 +180,28 @@
     <div class="container">
         <div class="logo"></div>
         <h1>OAuth Demo</h1>
-        <p class="subtitle">Test the Parallel.ai OAuth provider</p>
+        <p class="subtitle">Test the Parallel.ai OAuth provider with dynamic client registration</p>
 
         <div id="initial" class="section">
+            <div class="registration-info">
+                <h3>Dynamic Client Registration</h3>
+                <div>This demo will automatically register as a client using the current hostname as client_id.</div>
+            </div>
+
             <div class="step">
                 <span class="step-number">1</span>
-                Click "Start OAuth Flow" to begin authorization
+                Click "Start OAuth Flow" to register and begin authorization
             </div>
             <div class="step">
                 <span class="step-number">2</span>
-                Enter your Parallel.ai API key when prompted
+                Authorize the client to access your Parallel.ai API key
             </div>
             <div class="step">
                 <span class="step-number">3</span>
+                Enter your API key when prompted
+            </div>
+            <div class="step">
+                <span class="step-number">4</span>
                 Return here to see the access token
             </div>
 
@@ -188,7 +211,7 @@
         <div id="processing" class="section hidden">
             <div class="status loading">
                 <strong>Processing authorization...</strong><br>
-                Exchanging authorization code for access token...
+                <span id="processingMessage">Registering client...</span>
             </div>
         </div>
 
@@ -200,7 +223,6 @@
     </div>
 
     <script>
-        const clientId = window.location.hostname;
         const redirectUri = window.location.origin + '/';
 
         // Generate a random state parameter
@@ -208,19 +230,59 @@
             return Math.random().toString(36).substring(2) + Date.now().toString(36);
         }
 
+        // Register client dynamically
+        async function registerClient() {
+            try {
+                const response = await fetch('/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        redirect_uris: [redirectUri]
+                    })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.error_description || result.error || 'Registration failed');
+                }
+
+                return result.client_id;
+            } catch (error) {
+                throw new Error(`Client registration failed: ${error.message}`);
+            }
+        }
+
         // Start OAuth flow
-        document.getElementById('startBtn').addEventListener('click', () => {
-            const state = generateState();
-            localStorage.setItem('oauth_state', state);
+        document.getElementById('startBtn').addEventListener('click', async () => {
+            // Show processing screen
+            document.getElementById('initial').classList.add('hidden');
+            document.getElementById('processing').classList.remove('hidden');
 
-            const authUrl = new URL('/authorize', window.location.origin);
-            authUrl.searchParams.set('client_id', clientId);
-            authUrl.searchParams.set('redirect_uri', redirectUri);
-            authUrl.searchParams.set('response_type', 'code');
-            authUrl.searchParams.set('state', state);
-            authUrl.searchParams.set('scope', 'api');
+            try {
+                // Step 1: Register client
+                document.getElementById('processingMessage').textContent = 'Registering client...';
+                const clientId = await registerClient();
 
-            window.location.href = authUrl.toString();
+                // Step 2: Start OAuth flow
+                document.getElementById('processingMessage').textContent = 'Starting OAuth flow...';
+
+                const state = generateState();
+                localStorage.setItem('oauth_state', state);
+
+                const authUrl = new URL('/authorize', window.location.origin);
+                authUrl.searchParams.set('client_id', clientId);
+                authUrl.searchParams.set('redirect_uri', redirectUri);
+                authUrl.searchParams.set('response_type', 'code');
+                authUrl.searchParams.set('state', state);
+                authUrl.searchParams.set('scope', 'api');
+
+                window.location.href = authUrl.toString();
+            } catch (error) {
+                showError(`Registration error: ${error.message}`);
+            }
         });
 
         // Reset demo
@@ -262,6 +324,7 @@
                 // Show processing screen
                 document.getElementById('initial').classList.add('hidden');
                 document.getElementById('processing').classList.remove('hidden');
+                document.getElementById('processingMessage').textContent = 'Exchanging authorization code for access token...';
 
                 // Exchange code for token
                 await exchangeCodeForToken(code);
@@ -270,6 +333,9 @@
 
         async function exchangeCodeForToken(code) {
             try {
+                // First register to get client_id
+                const clientId = await registerClient();
+
                 const response = await fetch('/token', {
                     method: 'POST',
                     headers: {
@@ -291,7 +357,7 @@
                 if (response.ok) {
                     showSuccess(result);
                 } else {
-                    showError(`Token exchange failed: ${result.error || 'Unknown error'}`, result);
+                    showError(`Token exchange failed: ${result.error_description || result.error || 'Unknown error'}`, result);
                 }
 
             } catch (error) {
@@ -308,7 +374,7 @@
             statusEl.className = 'status success';
             statusEl.innerHTML = `
                 <strong>✓ Authorization successful!</strong><br>
-                Access token received and ready to use.
+                Access token received and ready to use with Parallel.ai API.
             `;
 
             tokenEl.classList.remove('hidden');

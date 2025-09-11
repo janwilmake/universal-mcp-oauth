@@ -15,12 +15,20 @@ export async function parallelOauthProvider(request, kv) {
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
   });
 
-  // Handle OPTIONS requests
-  if (request.method === "OPTIONS") {
+  // Helper function for OPTIONS responses
+  const handleOptionsRequest = (allowedMethods = ["GET", "OPTIONS"]) => {
     return new Response(null, {
       status: 204,
-      headers: getCorsHeaders(),
+      headers: {
+        ...getCorsHeaders(),
+        "Access-Control-Allow-Methods": allowedMethods.join(", "),
+      },
     });
+  };
+
+  // Handle OPTIONS requests
+  if (request.method === "OPTIONS") {
+    return handleOptionsRequest(["GET", "POST", "OPTIONS"]);
   }
 
   // OAuth Authorization Server Metadata (RFC8414)
@@ -30,6 +38,7 @@ export async function parallelOauthProvider(request, kv) {
       authorization_endpoint: `${url.origin}/authorize`,
       token_endpoint: `${url.origin}/token`,
       token_endpoint_auth_methods_supported: ["none"],
+      registration_endpoint: `${url.origin}/register`,
       response_types_supported: ["code"],
       grant_types_supported: ["authorization_code"],
       scopes_supported: ["api"],
@@ -62,6 +71,134 @@ export async function parallelOauthProvider(request, kv) {
     });
   }
 
+  // Dynamic Client Registration endpoint
+  if (path === "/register") {
+    if (request.method === "OPTIONS") {
+      return handleOptionsRequest(["POST", "OPTIONS"]);
+    }
+
+    const corsHeaders = getCorsHeaders();
+
+    if (request.method !== "POST") {
+      return new Response("Method not allowed", {
+        status: 405,
+        headers: corsHeaders,
+      });
+    }
+
+    try {
+      const body = await request.json();
+
+      // Validate redirect_uris is present and is an array
+      if (
+        !body.redirect_uris ||
+        !Array.isArray(body.redirect_uris) ||
+        body.redirect_uris.length === 0
+      ) {
+        return new Response(
+          JSON.stringify({
+            error: "invalid_client_metadata",
+            error_description: "redirect_uris must be a non-empty array",
+          }),
+          {
+            status: 400,
+            headers: {
+              ...corsHeaders,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+      }
+
+      // Extract hosts from all redirect URIs
+      const hostnames = new Set();
+      for (const uri of body.redirect_uris) {
+        try {
+          const url = new URL(uri);
+          hostnames.add(url.hostname);
+        } catch (e) {
+          return new Response(
+            JSON.stringify({
+              error: "invalid_redirect_uri",
+              error_description: `Invalid redirect URI: ${uri}`,
+            }),
+            {
+              status: 400,
+              headers: {
+                ...corsHeaders,
+                "Content-Type": "application/json",
+              },
+            }
+          );
+        }
+      }
+
+      // Ensure all redirect URIs have the same host
+      if (hostnames.size !== 1) {
+        return new Response(
+          JSON.stringify({
+            error: "invalid_client_metadata",
+            error_description: "All redirect URIs must have the same host",
+          }),
+          {
+            status: 400,
+            headers: {
+              ...corsHeaders,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+      }
+
+      const clientHost = Array.from(hostnames)[0];
+
+      // Response with client_id as the host
+      const response = {
+        client_id: clientHost,
+        redirect_uris: body.redirect_uris,
+        token_endpoint_auth_method: "none", // Public client, no secret needed
+        grant_types: ["authorization_code"],
+        response_types: ["code"],
+      };
+
+      return new Response(JSON.stringify(response, null, 2), {
+        status: 201,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store",
+          Pragma: "no-cache",
+        },
+      });
+    } catch (error) {
+      return new Response(
+        JSON.stringify({
+          error: "invalid_client_metadata",
+          error_description: "Invalid JSON in request body",
+        }),
+        {
+          status: 400,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+    }
+  }
+
+  // Helper function to validate domain
+  const isValidDomain = (domain) => {
+    const domainRegex =
+      /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+    return (
+      (domainRegex.test(domain) &&
+        domain.includes(".") &&
+        domain.length <= 253) ||
+      domain === "localhost"
+    );
+  };
+
   // Authorization endpoint - shows the API key input form
   if (path === "/authorize") {
     const clientId = url.searchParams.get("client_id");
@@ -71,6 +208,40 @@ export async function parallelOauthProvider(request, kv) {
 
     if (!clientId || !redirectUri || responseType !== "code") {
       return new Response("Invalid request parameters", {
+        status: 400,
+        headers: getCorsHeaders(),
+      });
+    }
+
+    // Validate that client_id looks like a domain
+    if (!isValidDomain(clientId)) {
+      return new Response("Invalid client_id: must be a valid domain", {
+        status: 400,
+        headers: getCorsHeaders(),
+      });
+    }
+
+    // Validate redirect_uri matches client_id hostname
+    try {
+      const redirectUrl = new URL(redirectUri);
+      if (redirectUrl.hostname !== clientId) {
+        return new Response(
+          "Invalid redirect_uri: must be on same origin as client_id",
+          {
+            status: 400,
+            headers: getCorsHeaders(),
+          }
+        );
+      }
+
+      if (redirectUrl.protocol !== "https:" && clientId !== "localhost") {
+        return new Response("Invalid redirect_uri: must use HTTPS", {
+          status: 400,
+          headers: getCorsHeaders(),
+        });
+      }
+    } catch {
+      return new Response("Invalid redirect_uri format", {
         status: 400,
         headers: getCorsHeaders(),
       });
@@ -145,6 +316,22 @@ export async function parallelOauthProvider(request, kv) {
             font-size: 14px;
             color: #d8d0bf;
             margin-bottom: 32px;
+        }
+
+        .trust-notice {
+            background: rgba(251, 99, 27, 0.1);
+            border: 2px solid #fb631b;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 24px;
+            font-size: 14px;
+            text-align: left;
+        }
+
+        .client-info {
+            font-weight: 500;
+            color: #fb631b;
+            margin-bottom: 8px;
         }
 
         .form-group {
@@ -228,23 +415,29 @@ export async function parallelOauthProvider(request, kv) {
 <body>
     <div class="container">
         <div class="logo"></div>
-        <h1>API Access</h1>
-        <p class="subtitle">Enter your Parallel.ai API key to continue</p>
+        <h1>API Access Authorization</h1>
+        <p class="subtitle">Grant access to your Parallel.ai API key</p>
+        
+        <div class="trust-notice">
+            <div class="client-info">${clientId}</div>
+            <div>Do you trust this application to access your Parallel.ai API key?</div>
+        </div>
         
         <form id="authForm">
             <div class="form-group">
-                <label for="apiKey">API Key</label>
+                <label for="apiKey">Your Parallel.ai API Key</label>
                 <input 
                     type="password" 
                     id="apiKey" 
                     name="apiKey" 
+                    placeholder="Enter your API key..."
                     required
                 />
                 <div id="error" class="error"></div>
             </div>
             
             <button type="submit" class="button" id="submitBtn">
-                Authorize Access
+                Authorize ${clientId}
             </button>
         </form>
         
@@ -309,7 +502,7 @@ export async function parallelOauthProvider(request, kv) {
             } catch (error) {
                 errorDiv.textContent = 'Authorization failed. Please try again.';
                 submitBtn.disabled = false;
-                submitBtn.textContent = 'Authorize Access';
+                submitBtn.textContent = 'Authorize ${clientId}';
             }
         });
     </script>
@@ -352,16 +545,39 @@ export async function parallelOauthProvider(request, kv) {
 
   // Token endpoint - exchanges auth code for API key
   if (path === "/token" && request.method === "POST") {
+    if (request.method === "OPTIONS") {
+      return handleOptionsRequest(["POST", "OPTIONS"]);
+    }
+
     try {
       const formData = await request.formData();
       const grantType = formData.get("grant_type");
       const code = formData.get("code");
+      const clientId = formData.get("client_id");
 
-      if (grantType !== "authorization_code" || !code) {
+      if (grantType !== "authorization_code" || !code || !clientId) {
         return new Response(
           JSON.stringify({
             error: "invalid_request",
-            error_description: "Invalid grant_type or missing code",
+            error_description:
+              "Invalid grant_type, missing code, or missing client_id",
+          }),
+          {
+            status: 400,
+            headers: {
+              ...getCorsHeaders(),
+              "Content-Type": "application/json",
+            },
+          }
+        );
+      }
+
+      // Validate client_id is a valid domain
+      if (!isValidDomain(clientId)) {
+        return new Response(
+          JSON.stringify({
+            error: "invalid_client",
+            error_description: "client_id must be a valid domain",
           }),
           {
             status: 400,
@@ -420,6 +636,33 @@ export async function parallelOauthProvider(request, kv) {
           headers: {
             ...getCorsHeaders(),
             "Content-Type": "application/json",
+          },
+        }
+      );
+    }
+  }
+
+  if (path === "/me") {
+    const accessToken =
+      request.headers.get("Authorization")?.slice("Bearer ".length) || "";
+    const resourceMetadataUrl = `${url.origin}/.well-known/oauth-protected-resource`;
+    const loginUrl = `${url.origin}/authorize?redirect_to=${encodeURIComponent(
+      request.url
+    )}`;
+
+    // Get access token from request
+    if (!accessToken) {
+      return new Response(
+        JSON.stringify({
+          error: "unauthorized",
+          error_description: "Access token required",
+        }),
+        {
+          status: 401,
+          headers: {
+            ...getCorsHeaders(),
+            "Content-Type": "application/json",
+            "WWW-Authenticate": `Bearer realm="main", login_url="${loginUrl}", resource_metadata="${resourceMetadataUrl}`,
           },
         }
       );

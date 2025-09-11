@@ -28,6 +28,6 @@ export default {
 };
 ```
 
-See [demo](demo.ts)
+See [demo](demo.ts) in combination with [index.html](index.html)
 
 The user just needs to get their API key from the Parallel dashboard and enter it once - it'll be remembered in localStorage for future use.
