@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Parallel.ai OAuth Demo</title>
+    <style>
+        @font-face {
+            font-family: 'FT System Mono';
+            src: url('https://assets.p0web.com/FTSystemMono-Regular.woff2') format('woff2');
+            font-weight: 400;
+            font-style: normal;
+        }
+
+        @font-face {
+            font-family: 'FT System Mono';
+            src: url('https://assets.p0web.com/FTSystemMono-Medium.woff2') format('woff2');
+            font-weight: 500;
+            font-style: normal;
+        }
+
+        @font-face {
+            font-family: 'Gerstner Programm';
+            src: url('https://assets.p0web.com/Gerstner-ProgrammRegular.woff2') format('woff2');
+            font-weight: 400;
+            font-style: normal;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'FT System Mono', monospace;
+            background-color: #fcfcfa;
+            color: #1d1b16;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+        }
+
+        .logo {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 32px;
+            background: url('https://assets.p0web.com/dark-parallel-symbol-270.svg') no-repeat center;
+            background-size: contain;
+        }
+
+        h1 {
+            font-family: 'Gerstner Programm', serif;
+            font-size: 28px;
+            font-weight: 400;
+            margin-bottom: 8px;
+            color: #1d1b16;
+        }
+
+        .subtitle {
+            font-size: 16px;
+            color: #d8d0bf;
+            margin-bottom: 32px;
+        }
+
+        .button {
+            display: inline-block;
+            padding: 16px 32px;
+            font-family: 'FT System Mono', monospace;
+            font-size: 16px;
+            font-weight: 500;
+            background: #fb631b;
+            color: #fcfcfa;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background-color 0.2s;
+            margin-bottom: 24px;
+        }
+
+        .button:hover {
+            background: #e55a18;
+        }
+
+        .button:disabled {
+            background: #d8d0bf;
+            cursor: not-allowed;
+        }
+
+        .status {
+            font-size: 14px;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+            text-align: left;
+        }
+
+        .status.loading {
+            background: #d8d0bf;
+            color: #1d1b16;
+        }
+
+        .status.success {
+            background: rgba(251, 99, 27, 0.1);
+            color: #1d1b16;
+            border: 2px solid #fb631b;
+        }
+
+        .status.error {
+            background: rgba(220, 53, 69, 0.1);
+            color: #dc3545;
+            border: 2px solid #dc3545;
+        }
+
+        .token-display {
+            background: #fcfcfa;
+            border: 2px solid #d8d0bf;
+            border-radius: 8px;
+            padding: 16px;
+            font-family: 'FT System Mono', monospace;
+            font-size: 14px;
+            text-align: left;
+            margin-bottom: 24px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .step {
+            margin-bottom: 16px;
+            padding: 12px;
+            background: rgba(216, 208, 191, 0.1);
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .step-number {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            background: #fb631b;
+            color: #fcfcfa;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 24px;
+            font-weight: 500;
+            margin-right: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="logo"></div>
+        <h1>OAuth Demo</h1>
+        <p class="subtitle">Test the Parallel.ai OAuth provider</p>
+
+        <div id="initial" class="section">
+            <div class="step">
+                <span class="step-number">1</span>
+                Click "Start OAuth Flow" to begin authorization
+            </div>
+            <div class="step">
+                <span class="step-number">2</span>
+                Enter your Parallel.ai API key when prompted
+            </div>
+            <div class="step">
+                <span class="step-number">3</span>
+                Return here to see the access token
+            </div>
+
+            <button class="button" id="startBtn">Start OAuth Flow</button>
+        </div>
+
+        <div id="processing" class="section hidden">
+            <div class="status loading">
+                <strong>Processing authorization...</strong><br>
+                Exchanging authorization code for access token...
+            </div>
+        </div>
+
+        <div id="result" class="section hidden">
+            <div id="status" class="status"></div>
+            <div id="tokenDisplay" class="token-display hidden"></div>
+            <button class="button" id="resetBtn">Try Again</button>
+        </div>
+    </div>
+
+    <script>
+        const clientId = window.location.hostname;
+        const redirectUri = window.location.origin + '/';
+
+        // Generate a random state parameter
+        function generateState() {
+            return Math.random().toString(36).substring(2) + Date.now().toString(36);
+        }
+
+        // Start OAuth flow
+        document.getElementById('startBtn').addEventListener('click', () => {
+            const state = generateState();
+            localStorage.setItem('oauth_state', state);
+
+            const authUrl = new URL('/authorize', window.location.origin);
+            authUrl.searchParams.set('client_id', clientId);
+            authUrl.searchParams.set('redirect_uri', redirectUri);
+            authUrl.searchParams.set('response_type', 'code');
+            authUrl.searchParams.set('state', state);
+            authUrl.searchParams.set('scope', 'api');
+
+            window.location.href = authUrl.toString();
+        });
+
+        // Reset demo
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            // Clear URL parameters
+            const url = new URL(window.location);
+            url.search = '';
+            window.history.replaceState({}, '', url);
+
+            // Show initial screen
+            document.getElementById('initial').classList.remove('hidden');
+            document.getElementById('processing').classList.add('hidden');
+            document.getElementById('result').classList.add('hidden');
+        });
+
+        // Check for authorization code in URL on page load
+        window.addEventListener('load', async () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const code = urlParams.get('code');
+            const state = urlParams.get('state');
+            const error = urlParams.get('error');
+
+            if (error) {
+                showError(`Authorization error: ${error}`);
+                return;
+            }
+
+            if (code) {
+                // Verify state parameter
+                const savedState = localStorage.getItem('oauth_state');
+                if (state !== savedState) {
+                    showError('Invalid state parameter - possible CSRF attack');
+                    return;
+                }
+
+                // Clear saved state
+                localStorage.removeItem('oauth_state');
+
+                // Show processing screen
+                document.getElementById('initial').classList.add('hidden');
+                document.getElementById('processing').classList.remove('hidden');
+
+                // Exchange code for token
+                await exchangeCodeForToken(code);
+            }
+        });
+
+        async function exchangeCodeForToken(code) {
+            try {
+                const response = await fetch('/token', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                        grant_type: 'authorization_code',
+                        code: code,
+                        client_id: clientId,
+                        redirect_uri: redirectUri,
+                    }),
+                });
+
+                const result = await response.json();
+
+                document.getElementById('processing').classList.add('hidden');
+                document.getElementById('result').classList.remove('hidden');
+
+                if (response.ok) {
+                    showSuccess(result);
+                } else {
+                    showError(`Token exchange failed: ${result.error || 'Unknown error'}`, result);
+                }
+
+            } catch (error) {
+                document.getElementById('processing').classList.add('hidden');
+                document.getElementById('result').classList.remove('hidden');
+                showError(`Network error: ${error.message}`);
+            }
+        }
+
+        function showSuccess(tokenData) {
+            const statusEl = document.getElementById('status');
+            const tokenEl = document.getElementById('tokenDisplay');
+
+            statusEl.className = 'status success';
+            statusEl.innerHTML = `
+                <strong>✓ Authorization successful!</strong><br>
+                Access token received and ready to use.
+            `;
+
+            tokenEl.classList.remove('hidden');
+            tokenEl.textContent = JSON.stringify(tokenData, null, 2);
+        }
+
+        function showError(message, details = null) {
+            document.getElementById('initial').classList.add('hidden');
+            document.getElementById('processing').classList.add('hidden');
+            document.getElementById('result').classList.remove('hidden');
+
+            const statusEl = document.getElementById('status');
+            statusEl.className = 'status error';
+            statusEl.innerHTML = `<strong>✗ Error:</strong><br>${message}`;
+
+            if (details) {
+                const tokenEl = document.getElementById('tokenDisplay');
+                tokenEl.classList.remove('hidden');
+                tokenEl.textContent = JSON.stringify(details, null, 2);
+            }
+        }
+    </script>
+</body>
+
+</html>

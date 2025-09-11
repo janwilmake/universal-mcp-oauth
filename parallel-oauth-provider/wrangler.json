@@ -1,0 +1,14 @@
+{
+  "$schema": "https://unpkg.com/wrangler@latest/config-schema.json",
+  "name": "parallel-oauth-provider",
+  "compatibility_date": "2025-08-20",
+  "assets": { "directory": "./" },
+  "main": "demo.ts",
+  "route": { "custom_domain": true, "pattern": "parallel.simplerauth.com" },
+  "kv_namespaces": [
+    {
+      "binding": "PKV",
+      "id": "db68e521ac50404a99470d67af47ae46"
+    }
+  ]
+}

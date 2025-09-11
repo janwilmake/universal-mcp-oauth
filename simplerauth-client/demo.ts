@@ -11,7 +11,7 @@ export default {
     },
     {
       isLoginRequired: true, // Force login
-      providerHostname: "localhost:8787", // Your OAuth provider
+      oauthProviderHost: "localhost:8787", // Your OAuth provider
       scope: "profile",
       sameSite: "Lax",
     }

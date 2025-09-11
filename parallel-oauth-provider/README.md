@@ -1,12 +1,33 @@
-## Parallel OAuth provider
+This minimal OAuth provider:
 
-1. I can use any third-party oauth providers to get a verified email from the user.
-2. I can use the accounts-service (see `openapi.json` and chat Mv) to turn an email into an access token, after which I can create/find an org and onboard the user to. This gives me the available access tokens and ability to create another.
-3. After the third-party OAuth flow, my parallel oauth provider should allow the user to select an API key or create a new one. This is the preferred flow for developer flows. Besides this, there could also be a quick action "Use custom key for {hostname}" to create or select the api key with a label that matches the client hostname..
+1. **Stateless except for temporary KV storage** - Only stores the API key for 10 minutes in KV during the auth flow
+2. **Uses localStorage** - Saves the API key in the browser for convenience on repeat visits
+3. **Simple flow**:
+   - `/authorize` shows a clean form asking for API key
+   - User enters API key, it gets stored in KV with a temporary auth code
+   - `/token` exchanges the auth code for the API key and deletes it from KV
+4. **Proper OAuth compliance** - Includes all the required metadata endpoints
+5. **Clean UI** - Minimal, focused design with the Parallel logo and proper styling
 
-Context - https://github.com/janwilmake/simplerauth-provider
+To use it in your Cloudflare Worker:
 
-# Faster intermediate way to do it (that doesn't require internal access - meaning it can be a fully community-based provider)
+```
+npm i parallel-oauth-provider
+```
 
-- Get verified X user
-- Just like Cloudflare Simplerauth, have dialog to to select or add API key, which will provide it back there.
+```js
+import { parallelOauthProvider } from "parallel-oauth-provider";
+
+export default {
+  async fetch(request, env) {
+    const oauthResponse = await parallelOauthProvider(request, env.KV);
+    if (oauthResponse) return oauthResponse;
+
+    // Your other routes...
+  },
+};
+```
+
+See [demo](demo.ts)
+
+The user just needs to get their API key from the Parallel dashboard and enter it once - it'll be remembered in localStorage for future use.
