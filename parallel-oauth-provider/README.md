@@ -31,10 +31,3 @@ export default {
 See [demo](demo.ts) in combination with [index.html](index.html)
 
 The user just needs to get their API key from the Parallel dashboard and enter it once - it'll be remembered in localStorage for future use.
-
-# TODO
-
-- Ensure kv doesn't create eventual consistency problems. If so, switch to DO.
-- It may be easier to host this at `mcp-oauth.parallel.ai` and use in conjunction with `simplerauth-client`. This way, it's just a matter of switching the oauthHost to `mcp-oauth.parallel.ai`.
-- Get it to work with mcp.agent-friendly.com (now having problem with cache)
-- Get it to work with `npx @modelcontextprotocol/inspector`
