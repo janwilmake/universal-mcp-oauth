@@ -42,13 +42,13 @@ export async function parallelOauthProvider(request, kv) {
       response_types_supported: ["code"],
       grant_types_supported: ["authorization_code"],
       scopes_supported: ["api"],
+      code_challenge_methods_supported: ["S256"],
     };
 
     return new Response(JSON.stringify(metadata, null, 2), {
       headers: {
         ...getCorsHeaders(),
         "Content-Type": "application/json",
-        "Cache-Control": "public, max-age=3600",
       },
     });
   }
@@ -66,7 +66,6 @@ export async function parallelOauthProvider(request, kv) {
       headers: {
         ...getCorsHeaders(),
         "Content-Type": "application/json",
-        "Cache-Control": "public, max-age=3600",
       },
     });
   }
