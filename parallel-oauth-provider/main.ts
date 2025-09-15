@@ -531,9 +531,7 @@ export async function parallelOauthProvider(request, kv) {
       // Store in KV with 10 minute expiration
       await kv.put(authCode, apiKey, { expirationTtl: 600 });
 
-      return new Response("OK", {
-        headers: getCorsHeaders(),
-      });
+      return new Response("OK", { headers: getCorsHeaders() });
     } catch (error) {
       return new Response("Invalid JSON", {
         status: 400,
@@ -666,6 +664,8 @@ export async function parallelOauthProvider(request, kv) {
         }
       );
     }
+
+    return new Response("me endpoint");
   }
 
   // Not an OAuth route
