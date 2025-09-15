@@ -101,49 +101,6 @@ export class UserDO extends DurableObject {
         FOREIGN KEY (user_id) REFERENCES users (user_id)
       )
     `);
-
-    // Add columns to existing tables if they don't exist
-    try {
-      this.sql.exec(
-        `ALTER TABLE users ADD COLUMN last_active_at INTEGER DEFAULT (unixepoch())`
-      );
-    } catch (e) {
-      // Column already exists
-    }
-    try {
-      this.sql.exec(
-        `ALTER TABLE users ADD COLUMN session_count INTEGER DEFAULT 1`
-      );
-    } catch (e) {
-      // Column already exists
-    }
-    try {
-      this.sql.exec(
-        `ALTER TABLE logins ADD COLUMN last_active_at INTEGER DEFAULT (unixepoch())`
-      );
-    } catch (e) {
-      // Column already exists
-    }
-    try {
-      this.sql.exec(
-        `ALTER TABLE logins ADD COLUMN session_count INTEGER DEFAULT 1`
-      );
-    } catch (e) {
-      // Column already exists
-    }
-
-    // Set alarm for 10 minutes from now
-    this.storage.setAlarm(Date.now() + 10 * 60 * 1000);
-  }
-
-  async alarm() {
-    // Only self-delete if this is not a user storage (auth codes expire, users don't)
-    const hasUser = this.sql
-      .exec(`SELECT COUNT(*) as count FROM users`)
-      .toArray()[0];
-    if (!hasUser || hasUser.count === 0) {
-      await this.storage.deleteAll();
-    }
   }
 
   async setAuthData(
