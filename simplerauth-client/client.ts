@@ -26,10 +26,10 @@ export interface SimplerAuthConfig {
   isLoginRequired?: boolean;
   /** OAuth scopes to request */
   scope?: string;
-  /** Cookie SameSite setting */
-  sameSite?: "Strict" | "Lax";
   /** The OAuth provider host (defaults to login.wilmake.com, which provides x oauth) */
   oauthProviderHost?: string;
+  /** Prefix to provider endpoints */
+  oauthProviderPathPrefix?: string;
 }
 
 /**
@@ -42,8 +42,8 @@ export function withSimplerAuth<TEnv = {}>(
   const {
     isLoginRequired = false,
     scope = "profile",
-    sameSite = "Lax",
     oauthProviderHost = "login.wilmake.com",
+    oauthProviderPathPrefix = "",
   } = config;
 
   const providerProtocol = oauthProviderHost.startsWith("localhost:")
@@ -64,14 +64,23 @@ export function withSimplerAuth<TEnv = {}>(
       path === "/.well-known/oauth-authorization-server" ||
       path.startsWith("/.well-known/oauth-authorization-server/")
     ) {
-      return handleAuthorizationServerMetadata(request, providerOrigin);
+      return handleAuthorizationServerMetadata(
+        request,
+        providerOrigin,
+        oauthProviderPathPrefix
+      );
     }
 
     if (
       path === "/.well-known/oauth-protected-resource" ||
       path.startsWith("/.well-known/oauth-protected-resource/")
     ) {
-      return handleProtectedResourceMetadata(request, env, providerOrigin);
+      return handleProtectedResourceMetadata(
+        request,
+        env,
+        providerOrigin,
+        oauthProviderPathPrefix
+      );
     }
 
     if (path === "/authorize") {
@@ -79,25 +88,34 @@ export function withSimplerAuth<TEnv = {}>(
         request,
         env,
         providerOrigin,
-        scope,
-        sameSite
+        oauthProviderPathPrefix,
+        scope
       );
     }
 
     if (path === "/callback") {
-      return await handleCallback(request, env, providerOrigin, sameSite);
+      return await handleCallback(
+        request,
+        env,
+        providerOrigin,
+        oauthProviderPathPrefix
+      );
     }
 
     if (path === "/token") {
-      return await handleToken(request, providerOrigin);
+      return await handleToken(
+        request,
+        providerOrigin,
+        oauthProviderPathPrefix
+      );
     }
 
     if (path === "/me") {
-      return await handleMe(request, providerOrigin);
+      return await handleMe(request, providerOrigin, oauthProviderPathPrefix);
     }
 
     if (path === "/logout") {
-      return handleLogout(request, sameSite);
+      return handleLogout(request);
     }
 
     // Get user from access token
@@ -108,9 +126,12 @@ export function withSimplerAuth<TEnv = {}>(
     if (accessToken) {
       try {
         // Verify token with provider and get user info
-        const userResponse = await fetch(`${providerOrigin}/me`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
+        const userResponse = await fetch(
+          `${providerOrigin}${oauthProviderPathPrefix}/me`,
+          {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          }
+        );
 
         if (userResponse.ok) {
           user = await userResponse.json();
@@ -161,7 +182,8 @@ export function withSimplerAuth<TEnv = {}>(
 
 function handleAuthorizationServerMetadata(
   request: Request,
-  providerOrigin: string
+  providerOrigin: string,
+  oauthProviderPathPrefix: string
 ): Response {
   if (request.method === "OPTIONS") {
     return new Response(null, {
@@ -176,10 +198,10 @@ function handleAuthorizationServerMetadata(
   }
   const metadata = {
     issuer: providerOrigin,
-    authorization_endpoint: `${providerOrigin}/authorize`,
-    token_endpoint: `${providerOrigin}/token`,
+    authorization_endpoint: `${providerOrigin}${oauthProviderPathPrefix}/authorize`,
+    token_endpoint: `${providerOrigin}${oauthProviderPathPrefix}/token`,
     token_endpoint_auth_methods_supported: ["none"],
-    registration_endpoint: `${providerOrigin}/register`,
+    registration_endpoint: `${providerOrigin}${oauthProviderPathPrefix}/register`,
     response_types_supported: ["code"],
     grant_types_supported: ["authorization_code"],
     code_challenge_methods_supported: ["S256"],
@@ -198,7 +220,8 @@ function handleAuthorizationServerMetadata(
 function handleProtectedResourceMetadata(
   request: Request,
   env: any,
-  providerOrigin: string
+  providerOrigin: string,
+  oauthProviderPathPrefix: string
 ): Response {
   const url = new URL(request.url);
   const port = env.PORT || 8787;
@@ -217,8 +240,12 @@ function handleProtectedResourceMetadata(
     ? `http://localhost:${port}`
     : `https://${url.host}`;
 
+  const protectedResourcePath = "/.well-known/oauth-protected-resource";
+
+  const suffix = url.pathname.slice(protectedResourcePath.length);
+
   const metadata = {
-    resource,
+    resource: resource + suffix,
     authorization_servers: [providerOrigin],
     scopes_supported: ["profile"],
     bearer_methods_supported: ["header", "body"],
@@ -292,8 +319,8 @@ async function handleAuthorize(
   request: Request,
   env: any,
   providerOrigin: string,
-  scope: string,
-  sameSite: string
+  oauthProviderPathPrefix: string,
+  scope: string
 ): Promise<Response> {
   const url = new URL(request.url);
 
@@ -339,7 +366,9 @@ async function handleAuthorize(
   const codeChallenge = await generateCodeChallenge(codeVerifier);
 
   // Build provider authorization URL
-  const providerUrl = new URL(`${providerOrigin}/authorize`);
+  const providerUrl = new URL(
+    `${providerOrigin}${oauthProviderPathPrefix}/authorize`
+  );
   providerUrl.searchParams.set("client_id", clientId);
   providerUrl.searchParams.set("redirect_uri", redirectUri);
   providerUrl.searchParams.set("response_type", "code");
@@ -363,32 +392,29 @@ async function handleAuthorize(
     "Set-Cookie",
     `redirect_uri=${encodeURIComponent(
       redirectUri
-    )}; HttpOnly; ${securePart}Max-Age=600; SameSite=${sameSite}; Path=/`
+    )}; HttpOnly; ${securePart}Max-Age=600; SameSite=Lax; Path=/`
   );
   headers.append(
     "Set-Cookie",
     `redirect_to=${encodeURIComponent(
       redirectTo
-    )}; HttpOnly; ${securePart}Max-Age=600; SameSite=${sameSite}; Path=/`
+    )}; HttpOnly; ${securePart}Max-Age=600; SameSite=Lax; Path=/`
   );
   headers.append(
     "Set-Cookie",
     `code_verifier=${encodeURIComponent(
       codeVerifier
-    )}; HttpOnly; ${securePart}Max-Age=600; SameSite=${sameSite}; Path=/`
+    )}; HttpOnly; ${securePart}Max-Age=600; SameSite=Lax; Path=/`
   );
 
-  return new Response(null, {
-    status: 302,
-    headers,
-  });
+  return new Response(null, { status: 302, headers });
 }
 
 async function handleCallback(
   request: Request,
   env: any,
   providerOrigin: string,
-  sameSite: string
+  oauthProviderPathPrefix: string
 ): Promise<Response> {
   const url = new URL(request.url);
   const cookies = parseCookies(request.headers.get("Cookie") || "");
@@ -402,7 +428,7 @@ async function handleCallback(
 
   // Get stored values from cookies
   const redirectUri = cookies.redirect_uri || `${url.origin}/callback`;
-  const redirectTo = cookies.redirect_to || state || "/";
+  const redirectTo = cookies.redirect_to || "/";
   const codeVerifier = cookies.code_verifier;
 
   if (!codeVerifier) {
@@ -429,11 +455,14 @@ async function handleCallback(
     console.log({ params });
 
     // Exchange code for token with the provider
-    const tokenResponse = await fetch(`${providerOrigin}/token`, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams(params),
-    });
+    const tokenResponse = await fetch(
+      `${providerOrigin}${oauthProviderPathPrefix}/token`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams(params),
+      }
+    );
 
     if (!tokenResponse.ok) {
       const errorText = await tokenResponse.text();
@@ -455,26 +484,23 @@ async function handleCallback(
     headers.set("Location", redirectTo);
     headers.append(
       "Set-Cookie",
-      `access_token=${tokenData.access_token}; HttpOnly; ${securePart}Max-Age=34560000; SameSite=${sameSite}; Path=/`
+      `access_token=${tokenData.access_token}; HttpOnly; ${securePart}Max-Age=34560000; SameSite=Lax; Path=/`
     );
     // Clear temporary cookies
     headers.append(
       "Set-Cookie",
-      `redirect_uri=; HttpOnly; ${securePart}Max-Age=0; SameSite=${sameSite}; Path=/`
+      `redirect_uri=; HttpOnly; ${securePart}Max-Age=0; SameSite=Lax; Path=/`
     );
     headers.append(
       "Set-Cookie",
-      `redirect_to=; HttpOnly; ${securePart}Max-Age=0; SameSite=${sameSite}; Path=/`
+      `redirect_to=; HttpOnly; ${securePart}Max-Age=0; SameSite=Lax; Path=/`
     );
     headers.append(
       "Set-Cookie",
-      `code_verifier=; HttpOnly; ${securePart}Max-Age=0; SameSite=${sameSite}; Path=/`
+      `code_verifier=; HttpOnly; ${securePart}Max-Age=0; SameSite=Lax; Path=/`
     );
 
-    return new Response(null, {
-      status: 302,
-      headers,
-    });
+    return new Response(null, { status: 302, headers });
   } catch (error) {
     console.error("Callback error:", error);
     return new Response("Authentication failed", { status: 500 });
@@ -483,7 +509,8 @@ async function handleCallback(
 
 async function handleToken(
   request: Request,
-  providerOrigin: string
+  providerOrigin: string,
+  oauthProviderPathPrefix: string
 ): Promise<Response> {
   // Handle preflight OPTIONS request
   if (request.method === "OPTIONS") {
@@ -531,7 +558,7 @@ async function handleToken(
     }
 
     // Proxy token request to the provider with all parameters
-    const providerUrl = `${providerOrigin}/token`;
+    const providerUrl = `${providerOrigin}${oauthProviderPathPrefix}/token`;
     const response = await fetch(providerUrl, {
       method: "POST",
       headers: {
@@ -575,7 +602,8 @@ async function handleToken(
 
 async function handleMe(
   request: Request,
-  providerOrigin: string
+  providerOrigin: string,
+  oauthProviderPathPrefix: string
 ): Promise<Response> {
   // Handle preflight OPTIONS request
   if (request.method === "OPTIONS") {
@@ -614,9 +642,8 @@ async function handleMe(
   }
 
   // Proxy /me requests to the provider
-  const providerUrl = `${providerOrigin}/me`;
+  const providerUrl = `${providerOrigin}${oauthProviderPathPrefix}/me`;
 
-  console.log("Checking me at ", { providerUrl, accessToken });
   try {
     const response = await fetch(providerUrl, {
       method: request.method,
@@ -626,7 +653,6 @@ async function handleMe(
     const responseBody = await response.text();
 
     if (!response.ok) {
-      console.log("NOT Kk");
       return new Response(responseBody, {
         status: response.status,
         statusText: response.statusText,
@@ -666,7 +692,7 @@ async function handleMe(
   }
 }
 
-function handleLogout(request: Request, sameSite: string): Response {
+function handleLogout(request: Request): Response {
   const url = new URL(request.url);
   const redirectTo = url.searchParams.get("redirect_to") || "/";
   const securePart = isLocalhost(request) ? "" : "Secure; ";
@@ -675,7 +701,7 @@ function handleLogout(request: Request, sameSite: string): Response {
     status: 302,
     headers: {
       Location: redirectTo,
-      "Set-Cookie": `access_token=; HttpOnly; ${securePart}SameSite=${sameSite}; Max-Age=0; Path=/`,
+      "Set-Cookie": `access_token=; HttpOnly; ${securePart}SameSite=Lax; Max-Age=0; Path=/`,
     },
   });
 }
