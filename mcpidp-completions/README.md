@@ -1,4 +1,6 @@
-Here's a curl command to test your MCP chat proxy:
+Demo live at: https://completions.mcpidp.com
+
+Here's a curl command to test:
 
 ```bash
 curl -X POST "https://completions.mcpidp.com/api.openai.com/v1/chat/completions" \
@@ -38,6 +40,7 @@ If the MCP server requires authentication, you should get a response with a mark
 
 - ✅ Create a simple HTML frontend.
 - 🤔 The API can only be used when we have the same X User ID as what the user gets when logging in here for a tool and this is NOT guaranteed, unless we actually teach developers of this API to use the oauth provider first to get the X user ID. IDK if this is the preferred way of doing things.
+  - make it a cloudflare middleware that works with any oauth!!!!
 - Ensure the Oauth Callback page is set to a success page that says "You've authorized using this MCP" or something.
 
 # IDEA
