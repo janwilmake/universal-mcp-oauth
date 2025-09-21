@@ -1,4 +1,5 @@
 import {
+  createMCPOAuthHandler,
   getAuthorization,
   getMCPProviders,
   MCPOAuthEnv,
@@ -470,20 +471,36 @@ async function executeChatRequest(
 }
 
 export const userChatCompletion = async (
+  request: Request,
   env: MCPOAuthEnv,
-  headers: any,
-  originUrl: string,
-  body: ChatCompletionRequest,
-  userId: string,
-  targetUrl: string
+  ctx: ExecutionContext,
+  config: {
+    targetUrl: string;
+    headers: any;
+    body: ChatCompletionRequest;
+    clientInfo: {
+      name: string;
+      title: string;
+      version: string;
+    };
+    userId: string;
+  }
 ) => {
-  try {
-    if (!userId) {
-      return new Response("Missing required user field in request body", {
-        status: 400,
-      });
-    }
+  const { body, clientInfo, headers, targetUrl, userId } = config;
+  const url = new URL(request.url);
 
+  const mcpOAuthHandler = createMCPOAuthHandler({
+    userId,
+    clientInfo,
+    baseUrl: url.origin,
+  });
+
+  const mcpResponse = await mcpOAuthHandler(request, env, ctx);
+  if (mcpResponse) {
+    return mcpResponse;
+  }
+
+  try {
     // Force streaming for internal requests (we'll handle the final streaming)
     const requestId = `chatcmpl-${Date.now()}`;
 
@@ -503,7 +520,7 @@ export const userChatCompletion = async (
       if (missingAuth.length > 0) {
         const stream = createAuthInstructionStream(
           missingAuth,
-          originUrl,
+          url.origin,
           requestId,
           body.model
         );

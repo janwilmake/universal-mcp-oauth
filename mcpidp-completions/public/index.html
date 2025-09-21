@@ -395,16 +395,14 @@
             }));
 
             const requestBody = {
-                model: model,
+                model,
                 messages: [
                     {
                         role: "user",
                         content: message
                     }
                 ],
-                temperature: 0.7,
                 stream: true,
-                user: currentUser.id
             };
 
             if (tools.length > 0) {
@@ -427,7 +425,7 @@
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${apikey}`
+                        'X-LLM-API-KEY': `${apikey}`
                     },
                     body: JSON.stringify(requestBody)
                 });
