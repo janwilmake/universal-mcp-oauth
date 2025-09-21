@@ -1,4 +1,10 @@
 {
+  "name": "mcpidp-completions",
+  "main": "user-chat-completions.ts",
+  "files": [
+    "user-chat-completions.ts"
+  ],
+  "version": "0.0.1",
   "dependencies": {
     "simplerauth-client": "0.0.17",
     "universal-mcp-oauth": "0.0.13"

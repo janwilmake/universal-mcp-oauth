@@ -1,13 +1,13 @@
-import { type MCPOAuthEnv, MCPProviders } from "universal-mcp-oauth";
 import { withSimplerAuth } from "simplerauth-client";
-export { MCPProviders };
 import {
   ChatCompletionRequest,
-  userChatCompletion,
+  MCPIDPMiddleware,
+  MCPProviders,
 } from "./user-chat-completion";
+export { MCPProviders };
 
 export default {
-  fetch: withSimplerAuth<MCPOAuthEnv>(
+  fetch: withSimplerAuth(
     async (request, env, ctx) => {
       const url = new URL(request.url);
       // Parse hostname and path
@@ -38,7 +38,7 @@ export default {
         return new Response("x-llm-api-key not provided", { status: 400 });
       }
 
-      const targetUrl = `https://${targetHostname}${remainingPath}`;
+      const llmEndpoint = `https://${targetHostname}${remainingPath}`;
       const body: ChatCompletionRequest = await request.json();
       const userId = ctx.user.id;
 
@@ -53,20 +53,17 @@ export default {
         });
       }
 
-      return userChatCompletion(
-        request,
-        env,
-        ctx,
-        {
+      return MCPIDPMiddleware(request, env, ctx, {
+        body,
+        userId,
+        llmEndpoint,
+        headers,
+        clientInfo: {
           name: "MCP Chat Proxy",
           title: "MCP Chat Completions Proxy",
           version: "1.0.0",
         },
-        headers,
-        body,
-        userId,
-        targetUrl
-      );
+      });
     },
     { isLoginRequired: true }
   ),

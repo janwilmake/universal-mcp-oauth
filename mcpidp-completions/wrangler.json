@@ -1,7 +1,7 @@
 {
   "$schema": "https://unpkg.com/wrangler@latest/config-schema.json",
   "name": "mcpidp-chat",
-  "main": "main.ts",
+  "main": "demo.ts",
   "compatibility_date": "2025-09-21",
   "assets": { "directory": "./public" },
   "durable_objects": {

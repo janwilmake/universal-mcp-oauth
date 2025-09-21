@@ -3,8 +3,9 @@ import {
   getAuthorization,
   getMCPProviders,
   MCPOAuthEnv,
+  MCPProviders,
 } from "universal-mcp-oauth";
-
+export { MCPProviders };
 interface MCPTool {
   type: "mcp";
   server_url: string;
@@ -470,12 +471,12 @@ async function executeChatRequest(
   return { messages, toolCalls, finished };
 }
 
-export const userChatCompletion = async (
+export const MCPIDPMiddleware = async (
   request: Request,
-  env: MCPOAuthEnv,
+  env: any,
   ctx: ExecutionContext,
   config: {
-    targetUrl: string;
+    llmEndpoint: string;
     headers: any;
     body: ChatCompletionRequest;
     clientInfo: {
@@ -486,7 +487,7 @@ export const userChatCompletion = async (
     userId: string;
   }
 ) => {
-  const { body, clientInfo, headers, targetUrl, userId } = config;
+  const { body, clientInfo, headers, llmEndpoint, userId } = config;
   const url = new URL(request.url);
 
   const mcpOAuthHandler = createMCPOAuthHandler({
@@ -576,7 +577,7 @@ export const userChatCompletion = async (
             };
 
             const { messages, toolCalls, finished } = await executeChatRequest(
-              targetUrl,
+              llmEndpoint,
               requestBody,
               headers,
               controller,
