@@ -104,7 +104,6 @@ type Tool = {
 - Do not succeed if `stream:true` not provided
 - Ensure the Oauth Callback page is set to a success page that says "You've authorized using this MCP" or something.
 - Create a way for users to manage their logged in mcps (not part of the middleware though, just provide as easy documented apis)
-- Ability to hold running the API waiting for a human to authorize, then continue fulfilling the request after that's solved. Potentially, a parameter `authorizationRequestCallback:URL` could be added, which would send the authorization request (just an url and message) to that endpoint, with the same secret. That endpoint could then send email, wapp, or notify in UI.
 - Explore the best way to provide the tool response event. Ideally it's not in the markdown, but more details are provided in a standardized way.
 
 # Other useful exploration
@@ -113,3 +112,4 @@ type Tool = {
 - Expose chat completions as MCP tool with oauth (basically a sub-agent!)
 - Allow simplifying the response into text-only (reduce from reasoning, error messages, tool data, etc etc)
 - Build a CLI that has the frontmatter
+- Ability to hold running the API waiting for a human to authorize, then continue fulfilling the request after that's solved. Potentially, a parameter `authorizationRequestCallback:URL` could be added, which would send the authorization request (just an url and message) to that endpoint, with the same secret. That endpoint could then send email, wapp, or notify in UI.
