@@ -99,6 +99,7 @@ type Tool = {
 - ✅ Create a simple HTML frontend.
 - 🤔 The API can only be used when we have the same X User ID as what the user gets when logging in here for a tool and this is NOT guaranteed, unless we actually teach developers of this API to use the oauth provider first to get the X user ID. IDK if this is the preferred way of doing things. ✅ make it a cloudflare middleware that works with any oauth!
 - Improve the API
+- Chat completions response stream should add event with MCP details (see if this is standardized or not)
 - Do not support any `require_approval` other than `never`
 - Do not succeed if `stream:true` not provided
 - Ensure the Oauth Callback page is set to a success page that says "You've authorized using this MCP" or something.
@@ -108,7 +109,7 @@ type Tool = {
 
 # Other useful exploration
 
-- Allow for long-running MCP tools (in the same way as [this sep](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1391)) - this makes this stateful though so may need to be done in a different place!
+- Allow for long-running MCP tools (in the same way as [this SEP](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1391)) - this makes this stateful though so may need to be done in a different place!
 - Expose chat completions as MCP tool with oauth (basically a sub-agent!)
 - Allow simplifying the response into text-only (reduce from reasoning, error messages, tool data, etc etc)
 - Build a CLI that has the frontmatter
