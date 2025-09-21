@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "simplerauth-client": "0.0.17",
+    "universal-mcp-oauth": "0.0.13"
+  }
+}
