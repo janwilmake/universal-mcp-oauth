@@ -6,6 +6,7 @@
 - ✅ Do not succeed if `stream:true` not provided
 - ✅ Better logging when MCP doesn't succeed and has error.
 - ✅ Fix why linear/notion don't work
+- 🤔 Look how long MCP init takes when immediately breaking up and when not. If it's useful/possible, reuse the session from the discovery to speed things up!
 - 🤔 It was very slow because we kept the SSE Stream open. Should be closed after receiving response!
 - ✅ Much faster now!
 - ✅ Cleaned up lines (1400 --> 800)
