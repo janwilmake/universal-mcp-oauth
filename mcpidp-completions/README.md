@@ -1,7 +1,8 @@
 Add MCP-Tool calling and tool execution **with authentication** to any LLM via a simple fetch-proxy
 
 ```ts
-const result = await new OpenAI({ fetch: fetchProxy }).chat.completions.create({
+const client = new OpenAI({ fetch: fetchProxy });
+const result = await client.chat.completions.create({
   // magically will ensure mcps are authenticated!
   tools: [{ type: "mcp", url: "https://mcp.notion.com/mcp" }] as any,
   // other stuff
