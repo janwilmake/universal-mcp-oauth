@@ -75,6 +75,17 @@ export default {
 
 ## Stateful chat completions with callbacks
 
+<!-- Valuable research/preparation for Parallel -->
+
 - Allow for long-running MCP tools (in the same way as [this SEP](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1391)) - this makes this stateful though so may need to be done in a different place!
 - Ability to hold running the API waiting for a human to authorize, then continue fulfilling the request after that's solved. Potentially, a parameter `authorizationRequestCallback:URL` could be added, which would send the authorization request (just an url and message) to that endpoint, with the same secret. That endpoint could then send email, wapp, or notify in UI.
 - Expose chat completions as async MCP tool with oauth (basically a sub-agent!)
+
+## Bring it home
+
+To add this to LMPIFY:
+
+- make URL longer when tools are defined (32 random characters, yet, still public!)
+- use frontmatter syntax to define MCPs to use and optional profile (used as suffix to user-id)
+- for anthropic, use https://docs.claude.com/en/api/openai-sdk
+- also, build in the url fetching with different configuration options and IDP.
