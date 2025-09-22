@@ -96,19 +96,38 @@ type Tool = {
 
 # TODO
 
-- ✅ Create a simple HTML frontend.
-- 🤔 The API can only be used when we have the same X User ID as what the user gets when logging in here for a tool and this is NOT guaranteed, unless we actually teach developers of this API to use the oauth provider first to get the X user ID. IDK if this is the preferred way of doing things. ✅ make it a cloudflare middleware that works with any oauth!
-- ✅ Do not support any `require_approval` other than `never`
-- ✅ Do not succeed if `stream:true` not provided
-- ✅ Better logging when MCP doesn't succeed and has error.
-- ✅ Fix why linear/notion don't work
-- 🤔 It was very slow because we kept the SSE Stream open. Should be closed after receiving response!
-- ✅ Much faster now!
-- Chat completions response stream should add event with MCP details (see if this is standardized or not)
 - Create a way for users to manage their logged in MCPs so they can also re-scope it (not part of the middleware though, just provide as easy documented APIs)
+- Add in token refresh functionality into `universal-mcp-oauth` and refresh tokens asynchronously when starting the stream.
 - Ensure the Oauth Callback page is set to a success page that says "You've authorized using this MCP" or something.
-- Explore the best way to provide the tool response event. Ideally it's not in the markdown, but more details are provided in a standardized way.
-- Improve the API.
+
+🤔 How to host this? Should it always used as hosted worker, or can `/chat/completions` be a fetch proxy function? Is hosted good since it allows using OpenAI SDK?
+
+```ts
+export default {
+  fetch: async (request, env, ctx) => {
+    // Just use mcps without auth and it'll just work!
+    const { fetchProxy, middleware } = await chatCompletionsProxy(
+      request,
+      env,
+      ctx
+    );
+
+    const middlewareResponse = await middleware(request, env, ctx);
+    if (middlewareResponse) {
+      return middlewareResponse;
+    }
+
+    const client = new OpenAI({ fetch: fetchProxy });
+    const result = await client.chat.completions.create({
+      messages: [],
+      model: "gpt-5",
+      tools: [{ type: "mcp", url: "https://mcp.notion.com/mcp" }] as any,
+    });
+  },
+};
+```
+
+- Instruct users to use `const client = new OpenAI({fetch,basePath,apiKey})` with `const mcpToolProxy
 
 🤔 Is this the right abstraction, or is it more useful to have a separate resource idp (maybe even protocol agnostic, just oauth2.1) and then automatically provide and keep up-to-date the access tokens before calling the MCP endpoint?
 

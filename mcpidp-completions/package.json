@@ -6,6 +6,7 @@
   ],
   "version": "0.0.1",
   "dependencies": {
+    "openai": "5.22.0",
     "simplerauth-client": "0.0.17",
     "universal-mcp-oauth": "0.0.13"
   }

@@ -1,10 +1,13 @@
+import { OpenAI } from "openai";
 import { withSimplerAuth } from "simplerauth-client";
 import {
   ChatCompletionRequest,
   chatCompletionsMiddleware,
   MCPProviders,
 } from "./user-chat-completion";
+
 import { createMCPOAuthHandler, MCPOAuthEnv } from "universal-mcp-oauth";
+import { ChatCompletionTool } from "openai/resources/index.mjs";
 export { MCPProviders };
 
 export default {
