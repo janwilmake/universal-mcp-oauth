@@ -98,18 +98,30 @@ type Tool = {
 
 - ✅ Create a simple HTML frontend.
 - 🤔 The API can only be used when we have the same X User ID as what the user gets when logging in here for a tool and this is NOT guaranteed, unless we actually teach developers of this API to use the oauth provider first to get the X user ID. IDK if this is the preferred way of doing things. ✅ make it a cloudflare middleware that works with any oauth!
-- Improve the API
+- ✅ Do not support any `require_approval` other than `never`
+- ✅ Do not succeed if `stream:true` not provided
+- ✅ Better logging when MCP doesn't succeed and has error.
+- ✅ Fix why linear/notion don't work
+- 🤔 It was very slow because we kept the SSE Stream open. Should be closed after receiving response!
+- ✅ Much faster now!
 - Chat completions response stream should add event with MCP details (see if this is standardized or not)
-- Do not support any `require_approval` other than `never`
-- Do not succeed if `stream:true` not provided
+- Create a way for users to manage their logged in MCPs so they can also re-scope it (not part of the middleware though, just provide as easy documented APIs)
 - Ensure the Oauth Callback page is set to a success page that says "You've authorized using this MCP" or something.
-- Create a way for users to manage their logged in mcps (not part of the middleware though, just provide as easy documented apis)
 - Explore the best way to provide the tool response event. Ideally it's not in the markdown, but more details are provided in a standardized way.
+- Improve the API.
+
+🤔 Is this the right abstraction, or is it more useful to have a separate resource idp (maybe even protocol agnostic, just oauth2.1) and then automatically provide and keep up-to-date the access tokens before calling the MCP endpoint?
+
+🤔 Look how long MCP init takes when immediately breaking up and when not. If it's useful/possible, reuse the session from the discovery to speed things up!
 
 # Other useful exploration
 
-- Allow for long-running MCP tools (in the same way as [this SEP](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1391)) - this makes this stateful though so may need to be done in a different place!
-- Expose chat completions as MCP tool with oauth (basically a sub-agent!)
 - Allow simplifying the response into text-only (reduce from reasoning, error messages, tool data, etc etc)
 - Build a CLI that has the frontmatter
+- A tool to search MCPs and continue the chat with different MCPs
+
+## Stateful chat completions with callbacks
+
+- Allow for long-running MCP tools (in the same way as [this SEP](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1391)) - this makes this stateful though so may need to be done in a different place!
 - Ability to hold running the API waiting for a human to authorize, then continue fulfilling the request after that's solved. Potentially, a parameter `authorizationRequestCallback:URL` could be added, which would send the authorization request (just an url and message) to that endpoint, with the same secret. That endpoint could then send email, wapp, or notify in UI.
+- Expose chat completions as async MCP tool with oauth (basically a sub-agent!)

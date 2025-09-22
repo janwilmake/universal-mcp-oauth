@@ -1,15 +1,39 @@
 import { withSimplerAuth } from "simplerauth-client";
 import {
   ChatCompletionRequest,
-  MCPIDPMiddleware,
+  chatCompletionsMiddleware,
   MCPProviders,
 } from "./user-chat-completion";
+import { createMCPOAuthHandler, MCPOAuthEnv } from "universal-mcp-oauth";
 export { MCPProviders };
 
 export default {
   fetch: withSimplerAuth(
     async (request, env, ctx) => {
       const url = new URL(request.url);
+
+      if (url.pathname.startsWith("/mcp/")) {
+        const mcpOAuthHandler = createMCPOAuthHandler({
+          userId: ctx.user.id,
+          clientInfo: {
+            name: "MCP Chat Proxy",
+            title: "MCP Chat Completions Proxy",
+            version: "1.0.0",
+          },
+          baseUrl: url.origin,
+        });
+
+        const mcpResponse = await mcpOAuthHandler(
+          request,
+          env as MCPOAuthEnv,
+          ctx
+        );
+
+        if (mcpResponse) {
+          return mcpResponse;
+        }
+      }
+
       // Parse hostname and path
       const pathSegments = url.pathname.split("/").filter(Boolean);
 
@@ -53,16 +77,11 @@ export default {
         });
       }
 
-      return MCPIDPMiddleware(request, env, ctx, {
+      return chatCompletionsMiddleware(request, env, ctx, {
         body,
         userId,
         llmEndpoint,
         headers,
-        clientInfo: {
-          name: "MCP Chat Proxy",
-          title: "MCP Chat Completions Proxy",
-          version: "1.0.0",
-        },
       });
     },
     { isLoginRequired: true }

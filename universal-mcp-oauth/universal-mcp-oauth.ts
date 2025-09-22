@@ -457,7 +457,11 @@ function getMcpStub(env: MCPOAuthEnv, userId: string, versionPrefix?: string) {
 export async function getMCPProviders(
   env: MCPOAuthEnv,
   userId: string
-): Promise<MCPProvider[]> {
+): Promise<
+  (MCPProvider & {
+    tools: { name: string; inputSchema: any; description: string }[];
+  })[]
+> {
   const mcpProviders = env.MCPProviders.get(
     env.MCPProviders.idFromName(VERSION + userId)
   );
