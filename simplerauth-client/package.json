@@ -1,6 +1,6 @@
 {
   "name": "simplerauth-client",
-  "version": "0.0.17",
+  "version": "0.0.18",
   "files": [
     "client.ts",
     "README.md"

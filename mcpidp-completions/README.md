@@ -33,6 +33,10 @@ Demo live at: https://completions.mcpidp.com
 - Create a way for users to manage their logged in MCPs so they can also re-scope it (not part of the middleware though, just provide as easy documented APIs)
 - Add in token refresh functionality into `universal-mcp-oauth` and refresh tokens asynchronously when starting the stream.
 - Ensure the Oauth Callback page is set to a success page that says "You've authorized using this MCP" or something.
+- Add refresh token rotation. figure out the best way to do this
+  - maybe adding a proxy (/mcp/proxy/{url}) that performs refresh if token is expired will be best?
+  - maybe just expose a function `refreshTokenIfNeeded(provider)` or even `stub.getFreshProviders(mcpUrls:string[]):Promise<MCPProvider[]>`
+- Understand problems with current implementation (https://letmeprompt.com/httpsmodelcontext-o5keiu0)
 
 🤔 How to host this? Should it always used as hosted worker, or can `/chat/completions` be a fetch proxy function? Is hosted good since it allows using OpenAI SDK?
 
@@ -66,6 +70,7 @@ export default {
 ```
 
 - Instruct users to use `const client = new OpenAI({fetch,basePath,apiKey})`
+- `stopWhen: [stepCountIs(10), // Maximum 10 stepshasToolCall('someTool'), // Stop after calling 'someTool'],`
 
 # Other useful exploration
 
@@ -89,3 +94,7 @@ To add this to LMPIFY:
 - use frontmatter syntax to define MCPs to use and optional profile (used as suffix to user-id)
 - for anthropic, use https://docs.claude.com/en/api/openai-sdk
 - also, build in the url fetching with different configuration options and IDP.
+
+Parallel
+
+- Create Integration-friendly Task API with MCP IDP built-in (by passing stable `user: string` ID) that instantly responds with a markdown-URL and JSON-URL on which the result will be able to be found without auth (`store:true` indefinitely, `store:false` for 24 hours)

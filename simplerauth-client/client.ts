@@ -211,7 +211,7 @@ function handleAuthorizationServerMetadata(
   return new Response(JSON.stringify(metadata, null, 2), {
     headers: {
       "Content-Type": "application/json",
-      "Cache-Control": "public, max-age=3600",
+      //    "Cache-Control": "public, max-age=3600",
       "Access-Control-Allow-Origin": "*",
     },
   });
