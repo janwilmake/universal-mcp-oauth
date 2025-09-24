@@ -1,3 +1,7 @@
+// make a /query endpoint only for admin usernames
+// ensure clientID ending up in logins is derived from callback_url
+// using this as api, vibecode stats so i can easily see a bargraph for unique users by app, by day.
+
 /// <reference types="@cloudflare/workers-types" />
 /// <reference lib="esnext" />
 import { DurableObject } from "cloudflare:workers";
@@ -474,7 +478,7 @@ tag = "v1"
       headers: {
         ...getCorsHeaders(),
         "Content-Type": "application/json",
-        "Cache-Control": "public, max-age=3600",
+        //  "Cache-Control": "public, max-age=3600",
       },
     });
   }
@@ -498,7 +502,7 @@ tag = "v1"
       headers: {
         ...getCorsHeaders(),
         "Content-Type": "application/json",
-        "Cache-Control": "public, max-age=3600",
+        //   "Cache-Control": "public, max-age=3600",
       },
     });
   }
@@ -566,11 +570,11 @@ tag = "v1"
       }
 
       // Ensure all redirect URIs have the same host
-      if (hostnames.size !== 1) {
+      if (hostnames.size < 1) {
         return new Response(
           JSON.stringify({
             error: "invalid_client_metadata",
-            error_description: "All redirect URIs must have the same host",
+            error_description: "Less than 1 redirect uri",
           }),
           {
             status: 400,
@@ -870,16 +874,13 @@ async function handleAuthorize(
   try {
     const redirectUrl = new URL(redirectUri);
 
-    if (redirectUrl.protocol !== "https:" && clientId !== "localhost") {
-      return new Response("Invalid redirect_uri: must use HTTPS", {
-        status: 400,
-        headers: getCorsHeaders(),
-      });
-    }
-
-    if (redirectUrl.hostname !== clientId) {
+    if (
+      redirectUrl.protocol === "http:" &&
+      redirectUrl.hostname !== "localhost" &&
+      redirectUrl.hostname !== "127.0.0.1"
+    ) {
       return new Response(
-        "Invalid redirect_uri: must be on same origin as client_id",
+        "Invalid redirect_uri: must use HTTPS unless localhost/127.0.0.1",
         {
           status: 400,
           headers: getCorsHeaders(),

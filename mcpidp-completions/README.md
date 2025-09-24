@@ -28,6 +28,8 @@ Demo live at: https://completions.mcpidp.com
 
 # TODO
 
+🤔 Design it so people can also just use anyones hosted version! If they want different oauth, self host. If not, fine! This is mega-powerful.
+
 🤔 Is this the right abstraction, or is it more useful to have a separate resource idp (maybe even protocol agnostic, just oauth2.1) and then automatically provide and keep up-to-date the access tokens before calling the MCP endpoint?
 
 - Create a way for users to manage their logged in MCPs so they can also re-scope it (not part of the middleware though, just provide as easy documented APIs)
@@ -77,6 +79,22 @@ export default {
 - Allow simplifying the response into text-only (reduce from reasoning, error messages, tool data, etc etc)
 - Build a CLI that has the frontmatter
 - A tool to search MCPs and continue the chat with different MCPs
+
+# Skill router
+
+This may not need to be something fully chained to the chat completions endpoint, but definitely a great thing to offer as well. A company should be able to list all their tools centrally so all employees can use all tools every prompt. A pre-selector prompt can do this.
+
+Questions:
+
+- How do we create a platform in which it's easy for companies to assign which users are their employees?
+  - X: See X company and who got added (expensive, not everyone has it)
+  - Email: see if people use company email (e.g. `@parallel.ai`)
+  - Slack: everyone who's in Slack arguably is inside of the org.
+- Do we need to let users be approved/invited into an org, or can the skill routing configuration be made public? May be more POC to be public. Also has benefits.
+
+TODO:
+
+- Create a super simple template for parallel
 
 ## Stateful chat completions with callbacks
 

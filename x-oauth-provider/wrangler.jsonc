@@ -3,7 +3,7 @@
   "name": "x-oauth-client-provider-test",
   "observability": { "logs": { "enabled": true } },
   "compatibility_date": "2025-01-27",
-
+  "dev": { "port": 3000 },
   "env": {
     "localhost": {
       // must be put here such that we can still see url.origin on localhost. Must run localhost with --env localhost
