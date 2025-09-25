@@ -13,9 +13,11 @@ Available Tools:
 - Parallel tasks: https://task-mcp.parallel.ai
 - Web Search: https://search-mcp.parallel.ai
 - X CRM: https://crm.grok-tools.com/mcp
-- GitHub: https://api.githubcopilot.com/mcp
+- X feed data: https://markdownfeed.com/mcp
+- GitHub: https://api.githubcopilot.com/mcp <!-- this is SSE so need better alternative-->
+- uithub MCP: https://mcp.uithub.com/mcp <!--gottamakethis! Should have tools and resources of logged in users for high level overview of repos with useful filter to reduce context-->
 - OpenAPI MCP server: https://server.smithery.ai/@janwilmake/openapi-mcp-server/mcp (use this to discover other OpenAPIs)
-- CURL MCP: https://curlmcp.com/mcp (use this for doing any API calls)
+- CURL MCP: https://curlmcp.com/mcp (use this for doing any API calls) <!-- killer addition: let users log in so authorization header can be omitted -->
 
 Resources & Prompts:
 
@@ -25,4 +27,4 @@ Resources & Prompts:
 
 # Your task
 
-Come up with the relevant MCP servers and context needed and return it as `{tools:{type:"mcp",tools_available:string[], url:string}[],context:string}`
+Come up with the relevant MCP servers and tools needed and return it as `{tools:{type:"mcp",tools_available:string[], url:string}[],context:string}`.

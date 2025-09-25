@@ -51,6 +51,7 @@ export function withSimplerAuth<TEnv = {}>(
     : "https";
   const providerOrigin = `${providerProtocol}://${oauthProviderHost}`;
 
+  const scopes_supported = scope.split(" ");
   return async (
     request: Request,
     env: TEnv,
@@ -67,7 +68,8 @@ export function withSimplerAuth<TEnv = {}>(
       return handleAuthorizationServerMetadata(
         request,
         providerOrigin,
-        oauthProviderPathPrefix
+        oauthProviderPathPrefix,
+        scopes_supported
       );
     }
 
@@ -79,7 +81,7 @@ export function withSimplerAuth<TEnv = {}>(
         request,
         env,
         providerOrigin,
-        oauthProviderPathPrefix
+        scopes_supported
       );
     }
 
@@ -183,7 +185,8 @@ export function withSimplerAuth<TEnv = {}>(
 function handleAuthorizationServerMetadata(
   request: Request,
   providerOrigin: string,
-  oauthProviderPathPrefix: string
+  oauthProviderPathPrefix: string,
+  scopes_supported: string[]
 ): Response {
   if (request.method === "OPTIONS") {
     return new Response(null, {
@@ -205,7 +208,7 @@ function handleAuthorizationServerMetadata(
     response_types_supported: ["code"],
     grant_types_supported: ["authorization_code"],
     code_challenge_methods_supported: ["S256"],
-    scopes_supported: ["profile"],
+    scopes_supported,
   };
 
   return new Response(JSON.stringify(metadata, null, 2), {
@@ -221,7 +224,7 @@ function handleProtectedResourceMetadata(
   request: Request,
   env: any,
   providerOrigin: string,
-  oauthProviderPathPrefix: string
+  scopes_supported: string[]
 ): Response {
   const url = new URL(request.url);
   const port = env.PORT || 8787;
@@ -247,7 +250,7 @@ function handleProtectedResourceMetadata(
   const metadata = {
     resource: resource + suffix,
     authorization_servers: [providerOrigin],
-    scopes_supported: ["profile"],
+    scopes_supported,
     bearer_methods_supported: ["header", "body"],
     resource_documentation: url.origin,
   };
