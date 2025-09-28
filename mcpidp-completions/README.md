@@ -1,12 +1,34 @@
 Add MCP-Tool calling and tool execution **with authentication** to any LLM via a simple fetch-proxy
 
 ```ts
-const client = new OpenAI({ fetch: fetchProxy });
-const result = await client.chat.completions.create({
-  // magically will ensure mcps are authenticated!
-  tools: [{ type: "mcp", url: "https://mcp.notion.com/mcp" }] as any,
-  // other stuff
-});
+export default {
+  fetch: async (request, env, ctx) => {
+    // Just use mcps without auth and it'll just work!
+    const { fetchProxy, middleware } = await chatCompletionsProxy(
+      request,
+      env,
+      ctx
+    );
+
+    const middlewareResponse = await middleware(request, env, ctx);
+    if (middlewareResponse) {
+      return middlewareResponse;
+    }
+
+    const client = new OpenAI({
+      basePath: "https://api.openai.com/v1",
+      fetch: fetchProxy,
+      apiKey,
+    });
+    const result = await client.chat.completions.create({
+      messages: [
+        // stuff
+      ],
+      model: "gpt-5",
+      tools: [{ type: "mcp", url: "https://mcp.notion.com/mcp" }] as any,
+    });
+  },
+};
 ```
 
 If the MCP server requires authentication, you should get a response with a markdown login link. Once authenticated, the tools will execute automatically and their results will appear as markdown in the assistant's response stream.
@@ -28,59 +50,37 @@ Demo live at: https://completions.mcpidp.com
 
 # TODO
 
-🤔 Design it so people can also just use anyones hosted version! If they want different oauth, self host. If not, fine! This is mega-powerful.
+## 1) Add this to LMPIFY:
 
-🤔 Is this the right abstraction, or is it more useful to have a separate resource idp (maybe even protocol agnostic, just oauth2.1) and then automatically provide and keep up-to-date the access tokens before calling the MCP endpoint?
+- Deploy as package `mcpidp-completions`
+- Test and confirm that usage event works properly
+- For anthropic, use https://docs.claude.com/en/api/openai-sdk
+- Make URL longer when tools are defined (32 random characters, yet, still public!)
+- Use frontmatter syntax to define MCPs to use and optional profile (used as suffix to user-id)
 
-- Create a way for users to manage their logged in MCPs so they can also re-scope it (not part of the middleware though, just provide as easy documented APIs)
-- Add in token refresh functionality into `universal-mcp-oauth` and refresh tokens asynchronously when starting the stream.
-- Ensure the Oauth Callback page is set to a success page that says "You've authorized using this MCP" or something.
-- Add refresh token rotation. figure out the best way to do this
-  - maybe adding a proxy (/mcp/proxy/{url}) that performs refresh if token is expired will be best?
-  - maybe just expose a function `refreshTokenIfNeeded(provider)` or even `stub.getFreshProviders(mcpUrls:string[]):Promise<MCPProvider[]>`
-- Understand problems with current implementation (https://letmeprompt.com/httpsmodelcontext-o5keiu0)
+<!-- If I have this, it's becomes the best new way to easily test new MCPs. -->
 
-🤔 How to host this? Should it always used as hosted worker, or can `/chat/completions` be a fetch proxy function? Is hosted good since it allows using OpenAI SDK?
+## 2) Stateful chat completions with callbacks
 
-```ts
-export default {
-  fetch: async (request, env, ctx) => {
-    // Just use mcps without auth and it'll just work!
-    const { fetchProxy, middleware } = await chatCompletionsProxy(
-      request,
-      env,
-      ctx
-    );
+<!-- Valuable research/preparation for Parallel. Also needed to separate auth UI from model response. Separating UI from model response opens the door for CLIs, MCP QA Testing & Monitoring, MarkdownOps, and much more! -->
 
-    const middlewareResponse = await middleware(request, env, ctx);
-    if (middlewareResponse) {
-      return middlewareResponse;
-    }
+- Allow for long-running MCP tools (in the same way as [this SEP](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1391)) - this makes this stateful though so may need to be done in a different place!
+- Ability to hold running the API waiting for a human to authorize, then continue fulfilling the request after that's solved. Potentially, a parameter `onUserMessage:(details)=>Promise<void>` could be added, which would send the authorization request (just an url and message) to that endpoint, with the same secret. That function could then send email, w'app, or notify in UI. Anything.
+- Expose chat completions as async MCP tool with oauth (basically a sub-agent!)
 
-    const result = await new OpenAI({
-      fetch: fetchProxy,
-      apiKey,
-    }).chat.completions.create({
-      messages: [
-        // stuff
-      ],
-      model: "gpt-5",
-      tools: [{ type: "mcp", url: "https://mcp.notion.com/mcp" }] as any,
-    });
-  },
-};
-```
+## openrouter demo
 
-- Instruct users to use `const client = new OpenAI({fetch,basePath,apiKey})`
-- `stopWhen: [stepCountIs(10), // Maximum 10 stepshasToolCall('someTool'), // Stop after calling 'someTool'],`
+- Duplicates https://openrouter.ai/chat but only minimal features of selecting models
+- Adds modal to add MCPs
 
-# Other useful exploration
+## Other useful exploration
 
+- Build in the same url expansion with different configuration (all urls or urls with prefix @) and IDP.
 - Allow simplifying the response into text-only (reduce from reasoning, error messages, tool data, etc etc)
 - Build a CLI that has the frontmatter
 - A tool to search MCPs and continue the chat with different MCPs
 
-# Skill router
+## Skill router
 
 This may not need to be something fully chained to the chat completions endpoint, but definitely a great thing to offer as well. A company should be able to list all their tools centrally so all employees can use all tools every prompt. A pre-selector prompt can do this.
 
@@ -96,23 +96,7 @@ TODO:
 
 - Create a super simple template for parallel
 
-## Stateful chat completions with callbacks
-
-<!-- Valuable research/preparation for Parallel -->
-
-- Allow for long-running MCP tools (in the same way as [this SEP](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1391)) - this makes this stateful though so may need to be done in a different place!
-- Ability to hold running the API waiting for a human to authorize, then continue fulfilling the request after that's solved. Potentially, a parameter `authorizationRequestCallback:URL` could be added, which would send the authorization request (just an url and message) to that endpoint, with the same secret. That endpoint could then send email, wapp, or notify in UI.
-- Expose chat completions as async MCP tool with oauth (basically a sub-agent!)
-
-## Bring it home
-
-To add this to LMPIFY:
-
-- make URL longer when tools are defined (32 random characters, yet, still public!)
-- use frontmatter syntax to define MCPs to use and optional profile (used as suffix to user-id)
-- for anthropic, use https://docs.claude.com/en/api/openai-sdk
-- also, build in the url fetching with different configuration options and IDP.
-
-Parallel
+## Parallel:
 
 - Create Integration-friendly Task API with MCP IDP built-in (by passing stable `user: string` ID) that instantly responds with a markdown-URL and JSON-URL on which the result will be able to be found without auth (`store:true` indefinitely, `store:false` for 24 hours)
+- Create task API as chat completions endpoint.

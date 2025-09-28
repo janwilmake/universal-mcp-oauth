@@ -32,6 +32,13 @@ export interface GitHubUser {
   avatar_url: string;
 }
 
+export interface User {
+  id: string;
+  name: string;
+  username: string;
+  profile_image_url?: string | undefined;
+}
+
 const isQueryReadOnly = (query: string) => {
   // TODO: refine this
   return query.toLowerCase().startsWith("select ");
@@ -149,12 +156,6 @@ export class UserDO extends DurableObject {
     clientId: string,
     resource: string
   ): Promise<string> {
-    // Validate that clientId matches resource hostname
-    const resourceUrl = new URL(resource);
-    if (resourceUrl.hostname !== clientId) {
-      throw new Error("Client ID must match resource hostname");
-    }
-
     // Get the user's GitHub access token
     const user = this.sql
       .exec(`SELECT github_access_token FROM users WHERE user_id = ?`, userId)
@@ -403,6 +404,17 @@ tag = "v1"
     );
   }
 
+  if (request.method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Headers":
+          "Content-Type, Authorization, MCP-Protocol-Version",
+      },
+    });
+  }
   if (path === "/admin") {
     const accessToken = getAccessToken(request);
     const resourceMetadataUrl = `${url.origin}/.well-known/oauth-protected-resource`;
@@ -484,6 +496,7 @@ tag = "v1"
       headers: {
         "Content-Type": "application/json",
         "Cache-Control": "public, max-age=3600",
+        "Access-Control-Allow-Origin": "*",
       },
     });
   }
@@ -502,6 +515,7 @@ tag = "v1"
       headers: {
         "Content-Type": "application/json",
         "Cache-Control": "public, max-age=3600",
+        "Access-Control-Allow-Origin": "*",
       },
     });
   }
@@ -527,7 +541,10 @@ tag = "v1"
           }),
           {
             status: 400,
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              "Access-Control-Allow-Origin": "*",
+            },
           }
         );
       }
@@ -546,20 +563,29 @@ tag = "v1"
             }),
             {
               status: 400,
-              headers: { "Content-Type": "application/json" },
+              headers: {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+              },
             }
           );
         }
       }
 
       // Ensure all redirect URIs have the same host
-      if (hosts.size !== 1) {
+      if (hosts.size < 1) {
         return new Response(
           JSON.stringify({
             error: "invalid_client_metadata",
-            error_description: "All redirect URIs must have the same host",
+            error_description: "Must have at least one host",
           }),
-          { status: 400, headers: { "Content-Type": "application/json" } }
+          {
+            status: 400,
+            headers: {
+              "Content-Type": "application/json",
+              "Access-Control-Allow-Origin": "*",
+            },
+          }
         );
       }
 
@@ -579,6 +605,7 @@ tag = "v1"
         headers: {
           "Content-Type": "application/json",
           "Cache-Control": "no-store",
+          "Access-Control-Allow-Origin": "*",
           Pragma: "no-cache",
         },
       });
@@ -590,7 +617,10 @@ tag = "v1"
         }),
         {
           status: 400,
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          },
         }
       );
     }
@@ -634,17 +664,6 @@ async function handleMe(
   ctx: ExecutionContext
 ): Promise<Response> {
   const url = new URL(request.url);
-  // Handle preflight OPTIONS request
-  if (request.method === "OPTIONS") {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
-      },
-    });
-  }
 
   if (request.method !== "GET") {
     return new Response(JSON.stringify({ error: "method_not_allowed" }), {
@@ -725,8 +744,16 @@ async function handleMe(
       );
     }
 
+    // Transform GitHub user to the required format
+    const user: User = {
+      id: userData.user.id.toString(),
+      name: userData.user.name || userData.user.login,
+      username: userData.user.login,
+      profile_image_url: userData.user.avatar_url || undefined,
+    };
+
     // Return user information
-    return new Response(JSON.stringify(userData.user), { headers });
+    return new Response(JSON.stringify(user), { headers });
   } catch (error) {
     console.error("Error retrieving user data:", error);
     return new Response(
@@ -788,12 +815,12 @@ async function handleAuthorize(
     });
   }
 
-  // Validate that client_id looks like a domain
-  if (!isValidDomain(clientId) && clientId !== "localhost") {
-    return new Response("Invalid client_id: must be a valid domain", {
-      status: 400,
-    });
-  }
+  // // Validate that client_id looks like a domain
+  // if (!isValidDomain(clientId) && clientId !== "localhost") {
+  //   return new Response("Invalid client_id: must be a valid domain", {
+  //     status: 400,
+  //   });
+  // }
 
   if (allowedClients !== undefined && !allowedClients.includes(clientId)) {
     return new Response(
@@ -813,13 +840,17 @@ async function handleAuthorize(
   try {
     const redirectUrl = new URL(redirectUri);
 
-    if (redirectUrl.protocol !== "https:" && clientId !== "localhost") {
+    if (
+      redirectUrl.protocol === "http:" &&
+      redirectUrl.hostname !== "localhost" &&
+      redirectUrl.hostname !== "127.0.0.1"
+    ) {
       return new Response("Invalid redirect_uri: must use HTTPS", {
         status: 400,
       });
     }
 
-    if (redirectUrl.hostname !== clientId) {
+    if (redirectUrl.host !== clientId) {
       return new Response(
         "Invalid redirect_uri: must be on same origin as client_id",
         { status: 400 }
@@ -963,18 +994,6 @@ async function handleToken(
   ctx: ExecutionContext,
   scope: string
 ): Promise<Response> {
-  // Handle preflight OPTIONS request
-  if (request.method === "OPTIONS") {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
-      },
-    });
-  }
-
   if (request.method !== "POST") {
     return new Response("Method not allowed", {
       status: 405,
@@ -1010,16 +1029,16 @@ async function handleToken(
   }
 
   // Validate client_id is a valid domain
-  if (
-    !isValidDomain(clientId.toString()) &&
-    clientId.toString() !== "localhost"
-  ) {
-    console.log(clientId.toString(), "invalid_client");
-    return new Response(JSON.stringify({ error: "invalid_client" }), {
-      status: 400,
-      headers,
-    });
-  }
+  // if (
+  //   !isValidDomain(clientId.toString()) &&
+  //   clientId.toString() !== "localhost"
+  // ) {
+  //   console.log(clientId.toString(), "invalid_client");
+  //   return new Response(JSON.stringify({ error: "invalid_client" }), {
+  //     status: 400,
+  //     headers,
+  //   });
+  // }
 
   // Get auth code data from Durable Object with "code:" prefix
   const id = env.UserDO.idFromName(`code:${code.toString()}`);

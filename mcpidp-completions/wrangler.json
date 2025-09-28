@@ -3,7 +3,6 @@
   "name": "mcpidp-chat",
   "main": "demo.ts",
   "compatibility_date": "2025-09-21",
-  "assets": { "directory": "./public" },
   "durable_objects": {
     "bindings": [{ "name": "MCPProviders", "class_name": "MCPProviders" }]
   },

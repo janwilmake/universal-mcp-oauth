@@ -11,3 +11,15 @@
 - ✅ Much faster now!
 - ✅ Cleaned up lines (1400 --> 800)
 - ✅ Explore the best way to provide the tool response event. Ideally it's not in the markdown, but more details are provided in a standardized way.
+
+# Improvements (2025-09-28)
+
+🤔 Design it so people can ALSO just use anyones hosted version! If they want different oauth, self host. If not, fine! This is mega-powerful.. Is this the right abstraction, or is it more useful to have a separate resource idp (maybe even protocol agnostic, just oauth2.1) and then automatically provide and keep up-to-date the access tokens before calling the MCP endpoint?
+
+- ✅ Ensure the refactored code works
+- ✅ Adhere to `max_tokens` throughout tool steps
+- ✅ Ensure the Oauth Callback page is set to a success page that says "You've authorized using this MCP" or something.
+- ✅ Create a way for users to manage their logged in MCPs so they can also re-scope it (not part of the middleware though, just provide as functions)
+- ✅ Add in token refresh functionality into `universal-mcp-oauth` and refresh tokens asynchronously when starting the stream.
+  - ✅ maybe adding a proxy (/mcp/proxy/{url}) that performs refresh if token is expired will be best?
+  - ✅ maybe just expose a function `refreshTokenIfNeeded(provider)` or even `stub.getFreshProviders(mcpUrls:string[]):Promise<MCPProvider[]>`

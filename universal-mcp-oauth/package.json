@@ -1,9 +1,9 @@
 {
   "name": "universal-mcp-oauth",
   "version": "0.0.13",
-  "main": "universal-mcp-oauth.ts",
+  "main": "index.ts",
   "files": [
-    "universal-mcp-oauth.ts"
+    "index.ts"
   ],
   "dependencies": {
     "mcp-client-server-registration": "^0.0.9"
