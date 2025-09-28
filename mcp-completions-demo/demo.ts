@@ -1,5 +1,5 @@
 import { withSimplerAuth } from "simplerauth-client";
-import { chatCompletionsProxy, MCPProviders } from "./user-chat-completion";
+import { chatCompletionsProxy, MCPProviders } from "../mcp-completions";
 
 export { MCPProviders };
 

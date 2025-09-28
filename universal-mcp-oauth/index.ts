@@ -4,7 +4,7 @@ import { DurableObject } from "cloudflare:workers";
 import {
   constructMCPAuthorizationUrl,
   extractMCPServerInfo,
-} from "../mcp-client-server-registration";
+} from "mcp-client-server-registration";
 
 export interface MCPOAuthEnv {
   MCPProviders: DurableObjectNamespace<MCPProviders>;

@@ -36,7 +36,7 @@ If the MCP server requires authentication, you should get a response with a mark
 # Installation & Usage
 
 ```
-npm i mcpidp-completions
+npm i mcp-completions
 ```
 
 Usage:
@@ -44,7 +44,7 @@ Usage:
 > [!TIP]
 > Don't rely on this yet, breaking changes imminent!
 
-See [demo.ts](demo.ts)
+See [demo.ts](../mcp-completions-demo/demo.ts)
 
 Demo live at: https://completions.mcpidp.com
 
@@ -52,7 +52,7 @@ Demo live at: https://completions.mcpidp.com
 
 ## 1) Add this to LMPIFY:
 
-- Deploy as package `mcpidp-completions`
+- ✅ Deploy as package `mcp-completions`
 - Test and confirm that usage event works properly
 - For anthropic, use https://docs.claude.com/en/api/openai-sdk
 - Make URL longer when tools are defined (32 random characters, yet, still public!)

@@ -5,7 +5,7 @@ import {
   createMCPOAuthHandler,
   MCPOAuthEnv,
   MCPProvider,
-} from "../universal-mcp-oauth";
+} from "universal-mcp-oauth";
 
 export { MCPProviders };
 
@@ -66,6 +66,8 @@ interface MCPSession {
     name: string;
     description?: string;
     inputSchema?: any;
+    // optional
+    outputSchema?: any;
   }>;
 }
 

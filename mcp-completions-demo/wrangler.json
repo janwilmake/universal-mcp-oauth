@@ -12,5 +12,5 @@
       "new_sqlite_classes": ["MCPProviders"]
     }
   ],
-  "routes": [{ "custom_domain": true, "pattern": "completions.mcpidp.com" }]
+  "routes": [{ "custom_domain": true, "pattern": "demo.connectconnector.com" }]
 }
