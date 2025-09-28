@@ -50,16 +50,6 @@ Demo live at: https://completions.mcpidp.com
 
 # TODO
 
-## 1) Add this to LMPIFY:
-
-- ✅ Deploy as package `mcp-completions`
-- Test and confirm that usage event works properly
-- For anthropic, use https://docs.claude.com/en/api/openai-sdk
-- Make URL longer when tools are defined (32 random characters, yet, still public!)
-- Use frontmatter syntax to define MCPs to use and optional profile (used as suffix to user-id)
-
-<!-- If I have this, it's becomes the best new way to easily test new MCPs. -->
-
 ## 2) Stateful chat completions with callbacks
 
 <!-- Valuable research/preparation for Parallel. Also needed to separate auth UI from model response. Separating UI from model response opens the door for CLIs, MCP QA Testing & Monitoring, MarkdownOps, and much more! -->
