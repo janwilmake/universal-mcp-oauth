@@ -1,0 +1,16 @@
+{
+  "name": "openrouter-oauth-provider",
+  "main": "index.js",
+  "files": [
+    "index.js",
+    "README.md"
+  ],
+  "version": "0.0.1",
+  "description": "MCP-compliant OAuth provider for OpenRouter API keys",
+  "keywords": [
+    "oauth",
+    "openrouter",
+    "mcp",
+    "api"
+  ]
+}
