@@ -38,63 +38,6 @@ export async function openrouterOauthProvider(
     });
   };
 
-  // Derive encryption key from secret for state encryption
-  const deriveKey = async (secret) => {
-    const encoder = new TextEncoder();
-    const keyMaterial = await crypto.subtle.importKey(
-      "raw",
-      encoder.encode(secret),
-      { name: "PBKDF2" },
-      false,
-      ["deriveKey"]
-    );
-
-    return await crypto.subtle.deriveKey(
-      {
-        name: "PBKDF2",
-        salt: encoder.encode("openrouter-oauth-salt"),
-        iterations: 100000,
-        hash: "SHA-256",
-      },
-      keyMaterial,
-      { name: "AES-GCM", length: 256 },
-      false,
-      ["encrypt", "decrypt"]
-    );
-  };
-
-  // Encrypt state data
-  const encryptState = async (data, secret) => {
-    const key = await deriveKey(secret);
-    const encoder = new TextEncoder();
-    const dataBytes = encoder.encode(JSON.stringify(data));
-
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const encrypted = await crypto.subtle.encrypt(
-      { name: "AES-GCM", iv },
-      key,
-      dataBytes
-    );
-
-    return {
-      encrypted: Array.from(new Uint8Array(encrypted)),
-      iv: Array.from(iv),
-    };
-  };
-
-  // Decrypt state data
-  const decryptState = async (encryptedData, secret) => {
-    const key = await deriveKey(secret);
-    const decrypted = await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv: new Uint8Array(encryptedData.iv) },
-      key,
-      new Uint8Array(encryptedData.encrypted)
-    );
-
-    const decoder = new TextDecoder();
-    return JSON.parse(decoder.decode(decrypted));
-  };
-
   // Generate PKCE parameters
   const generatePKCE = () => {
     const array = new Uint8Array(32);
@@ -115,6 +58,20 @@ export async function openrouterOauthProvider(
           .replace(/\//g, "_")
           .replace(/=/g, ""),
       }));
+  };
+
+  // Create a deterministic key from redirect_uri and code_challenge
+  const createSessionKey = async (redirectUri, codeChallenge) => {
+    const data = `${redirectUri}:${codeChallenge}`;
+    const hash = await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(data)
+    );
+    const hashArray = Array.from(new Uint8Array(hash));
+    return hashArray
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("")
+      .substring(0, 32);
   };
 
   // Handle OPTIONS requests
@@ -294,36 +251,33 @@ export async function openrouterOauthProvider(
     // Generate our own PKCE parameters for OpenRouter
     const pkce = await generatePKCE();
 
-    // Generate state for tracking
-    const stateId = crypto.randomUUID();
+    // Create a deterministic session key based on the original request
+    const sessionKey = await createSessionKey(redirectUri, codeChallenge);
 
-    // Store state information encrypted in KV
-    const stateData = {
+    // Store session information in KV using the deterministic key
+    const sessionData = {
       originalRedirectUri: redirectUri,
       originalState: state,
       originalCodeChallenge: codeChallenge,
       codeVerifier: pkce.codeVerifier,
+      timestamp: Date.now(),
     };
 
-    const encryptedState = await encryptState(stateData, secret);
-
     await kv.put(
-      `state_${stateId}`,
-      JSON.stringify(encryptedState),
+      `session_${sessionKey}`,
+      JSON.stringify(sessionData),
       { expirationTtl: 600 } // 10 minutes
     );
 
-    // Build OpenRouter authorization URL
+    // Build OpenRouter authorization URL - pass through the original state
     const openrouterAuthUrl = new URL("https://openrouter.ai/auth");
     openrouterAuthUrl.searchParams.set("callback_url", redirectUri);
     openrouterAuthUrl.searchParams.set("code_challenge", pkce.codeChallenge);
     openrouterAuthUrl.searchParams.set("code_challenge_method", "S256");
 
-    // Add our state parameter to track the request
+    // Pass through the original state if provided
     if (state) {
-      openrouterAuthUrl.searchParams.set("state", `${stateId}:${state}`);
-    } else {
-      openrouterAuthUrl.searchParams.set("state", stateId);
+      openrouterAuthUrl.searchParams.set("state", state);
     }
 
     return new Response(null, {
@@ -351,12 +305,17 @@ export async function openrouterOauthProvider(
       const codeVerifier = formData.get("code_verifier");
       const redirectUri = formData.get("redirect_uri");
 
-      if (grantType !== "authorization_code" || !code || !codeVerifier) {
+      if (
+        grantType !== "authorization_code" ||
+        !code ||
+        !codeVerifier ||
+        !redirectUri
+      ) {
         return new Response(
           JSON.stringify({
             error: "invalid_request",
             error_description:
-              "Invalid grant_type, missing code, or missing code_verifier",
+              "Invalid grant_type, missing code, redirect_uri, or missing code_verifier",
           }),
           {
             status: 400,
@@ -368,8 +327,61 @@ export async function openrouterOauthProvider(
         );
       }
 
-      // The code we receive is actually from OpenRouter
-      // We need to exchange it for an API key using OpenRouter's token endpoint
+      // Verify the PKCE challenge
+      const hash = await crypto.subtle.digest(
+        "SHA-256",
+        new TextEncoder().encode(codeVerifier)
+      );
+      const computedChallenge = btoa(
+        String.fromCharCode(...new Uint8Array(hash))
+      )
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=/g, "");
+
+      // Create the same session key to look up our stored data
+      const sessionKey = await createSessionKey(redirectUri, computedChallenge);
+      const sessionDataStr = await kv.get(`session_${sessionKey}`);
+
+      if (!sessionDataStr) {
+        return new Response(
+          JSON.stringify({
+            error: "invalid_grant",
+            error_description: "Invalid or expired authorization code",
+          }),
+          {
+            status: 400,
+            headers: {
+              ...getCorsHeaders(),
+              "Content-Type": "application/json",
+            },
+          }
+        );
+      }
+
+      const sessionData = JSON.parse(sessionDataStr);
+
+      // Verify the code_verifier matches what we stored
+      if (computedChallenge !== sessionData.originalCodeChallenge) {
+        return new Response(
+          JSON.stringify({
+            error: "invalid_grant",
+            error_description: "Invalid code_verifier",
+          }),
+          {
+            status: 400,
+            headers: {
+              ...getCorsHeaders(),
+              "Content-Type": "application/json",
+            },
+          }
+        );
+      }
+
+      // Clean up the session data
+      await kv.delete(`session_${sessionKey}`);
+
+      // Exchange the code with OpenRouter using our stored code_verifier
       const tokenResponse = await fetch(
         "https://openrouter.ai/api/v1/auth/keys",
         {
@@ -379,6 +391,8 @@ export async function openrouterOauthProvider(
           },
           body: JSON.stringify({
             code: code,
+            code_verifier: sessionData.codeVerifier,
+            code_challenge_method: "S256",
           }),
         }
       );
