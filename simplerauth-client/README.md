@@ -108,14 +108,14 @@ function withSimplerAuth<TEnv = {}>(
 ): ExportedHandlerFetchHandler<TEnv>;
 
 interface SimplerAuthConfig {
-  /** Force login for all requests */
+  /** If true, login will be forced and user will always be present */
   isLoginRequired?: boolean;
-  /** OAuth scopes (default: "profile") */
+  /** OAuth scopes to request */
   scope?: string;
-  /** Cookie SameSite setting (default: "Lax") */
-  sameSite?: "Strict" | "Lax";
-  /** OAuth provider hostname (default: "login.wilmake.com") */
-  providerHostname?: string;
+  /** The OAuth provider host (defaults to login.wilmake.com, which provides x oauth) */
+  oauthProviderHost?: string;
+  /** Prefix to provider endpoints */
+  oauthProviderPathPrefix?: string;
 }
 
 interface UserContext extends ExecutionContext {
@@ -128,11 +128,18 @@ interface UserContext extends ExecutionContext {
 }
 
 type User = {
+  /** required properties every /me endpoint should return*/
   id: string;
   name: string;
   username: string;
+  /** optional properties some providers return */
+
+  /** credit used since on this client */
+  usage?: number;
+  /** credit available on this client */
+  balance?: number;
+  /** url to profile image*/
   profile_image_url?: string;
-  verified?: boolean;
 };
 ```
 

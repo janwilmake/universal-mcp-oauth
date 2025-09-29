@@ -10,11 +10,18 @@ export interface UserContext extends ExecutionContext {
 }
 
 type User = {
+  /** required properties every /me endpoint should return*/
   id: string;
   name: string;
   username: string;
-  profile_image_url?: string | undefined;
-  verified?: boolean | undefined;
+  /** optional properties some providers return */
+
+  /** credit used since on this client */
+  usage?: number;
+  /** credit available on this client */
+  balance?: number;
+  /** url to profile image*/
+  profile_image_url?: string;
 };
 
 interface UserFetchHandler<TEnv = {}> {

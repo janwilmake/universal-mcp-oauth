@@ -414,7 +414,9 @@ export async function openrouterOauthProvider(
           }
         );
       }
-
+      /**
+       * @type {{key:string,user_id:string|null}}
+       */
       const tokenData = await tokenResponse.json();
 
       if (!tokenData.key) {
@@ -517,15 +519,20 @@ export async function openrouterOauthProvider(
           }
         );
       }
-
+      /**
+       * @type {{data:{label:string,limit:null|string,usage:number,is_provisioning_key:boolean,limit_remaining:null|number,is_free_tier:boolean,rate_limit:any}}}
+       */
       const keyData = await keyResponse.json();
 
       // Return minimal user info (MCP requirement)
       return new Response(
         JSON.stringify({
-          id: keyData.id || "openrouter_user",
-          name: keyData.name || "OpenRouter User",
-          username: keyData.name || "openrouter_user",
+          name: "OpenRouter User",
+          // just take last 7 characters from the access token.
+          id: accessToken.slice(-7),
+          username: accessToken.slice(-7),
+          usage: keyData.data?.usage,
+          balance: keyData.data?.limit_remaining,
         }),
         {
           headers: {
