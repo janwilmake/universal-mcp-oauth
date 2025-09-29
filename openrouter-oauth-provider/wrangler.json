@@ -3,6 +3,17 @@
   "name": "simplerauth-openrouter",
   "compatibility_date": "2025-09-26",
   "main": "worker.ts",
-  "dev": { "port": 3000 },
-  "route": { "custom_domain": true, "pattern": "oopenrouter.simplerauth.com" }
+  "dev": {
+    "port": 3000
+  },
+  "route": {
+    "custom_domain": true,
+    "pattern": "openrouter.simplerauth.com"
+  },
+  "kv_namespaces": [
+    {
+      "binding": "KV",
+      "id": "a9b2734b20ea42e9abe1fea97d4e3611"
+    }
+  ]
 }
