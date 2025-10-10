@@ -22,6 +22,21 @@ interface UserConfig {
   parallelApiKey?: string;
 }
 
+class UserDataInjector {
+  constructor(private userData: any) {}
+
+  element(element: Element) {
+    if (element.tagName === "head") {
+      element.append(
+        `<script>window.userData = ${JSON.stringify(this.userData)
+          .replace(/</g, "\\u003c")
+          .replace(/>/g, "\\u003e")};</script>`,
+        { html: true }
+      );
+    }
+  }
+}
+
 export default {
   fetch: withSimplerAuth<Env>(async (request, env, ctx) => {
     const url = new URL(request.url);
@@ -32,17 +47,21 @@ export default {
         return new Response("Unauthorized", { status: 401 });
       }
 
-      const mcpHandler = createMCPOAuthHandler({
-        userId: ctx.user.id,
-        baseUrl: url.origin,
-        clientInfo: {
-          name: "Parallel Tasks",
-          title: "Task Execution with MCPs",
-          version: "1.0.0",
-        },
-      });
+      const { getProviders, middleware, refreshProviders, removeMcp } =
+        createMCPOAuthHandler(
+          {
+            userId: ctx.user.id,
+            baseUrl: url.origin,
+            clientInfo: {
+              name: "Parallel Tasks",
+              title: "Task Execution with MCPs",
+              version: "1.0.0",
+            },
+          },
+          env
+        );
 
-      const mcpResponse = await mcpHandler(request, env, ctx);
+      const mcpResponse = await middleware(request, env, ctx);
       if (mcpResponse) {
         return mcpResponse;
       }
@@ -242,7 +261,9 @@ async function handleLandingPage(
   user: UserContext["user"] | undefined,
   env: Env
 ) {
-  let html = homepage;
+  const response = new Response(homepage, {
+    headers: { "Content-Type": "text/html" },
+  });
 
   if (user) {
     // Get user's MCP providers using the new package
@@ -256,14 +277,11 @@ async function handleLandingPage(
 
     const userData = { user, providers, apiKey };
 
-    // Inject data into HTML
-    html = html.replace(
-      "</head>",
-      `<script>window.userData = ${JSON.stringify(userData)};</script></head>`
-    );
+    // Use HTMLRewriter to safely inject user data
+    return new HTMLRewriter()
+      .on("head", new UserDataInjector(userData))
+      .transform(response);
   }
 
-  return new Response(html, {
-    headers: { "Content-Type": "text/html" },
-  });
+  return response;
 }

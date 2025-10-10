@@ -1,0 +1,9 @@
+{
+  "name": "parallel-oauth-provider",
+  "main": "index.js",
+  "files": [
+    "index.js",
+    "README.md"
+  ],
+  "version": "0.0.13"
+}

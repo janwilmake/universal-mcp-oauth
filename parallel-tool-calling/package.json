@@ -3,7 +3,8 @@
     "@cloudflare/workers-types": "^4.20250809.0"
   },
   "dependencies": {
-    "simplerauth-client": "^0.0.11",
-    "universal-mcp-oauth": "^0.0.13"
+    "mcp-client-server-registration": "0.0.11",
+    "simplerauth-client": "0.0.20",
+    "universal-mcp-oauth": "0.0.14"
   }
 }
