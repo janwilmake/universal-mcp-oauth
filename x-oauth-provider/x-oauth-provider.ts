@@ -1159,6 +1159,7 @@ async function handleToken(
   }
 
   // MCP Required: Validate resource parameter matches if provided
+  // if i remove this, in chatgpt i get { error:"Connector is not safe"}
   if (!resource || authData.resource !== resource) {
     console.error({ resource, authResource: authData.resource });
     return new Response(

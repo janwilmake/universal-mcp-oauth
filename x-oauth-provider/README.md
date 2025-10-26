@@ -1,6 +1,6 @@
 # X OAuth Provider
 
-[![janwilmake/x-oauth-provider context](https://badge.forgithub.com/janwilmake/x-oauth-provider/tree/main/README.md)](https://uithub.com/janwilmake/x-oauth-provider/tree/main/README.md) [![](https://b.lmpify.com)](https://letmeprompt.com?q=https://uithub.com/janwilmake/x-oauth-provider/tree/main/README.md)
+[![](https://badge.forgithub.com/janwilmake/universal-oauth-provider/tree/main/x-oauth-provider/README.md)](https://uithub.com/janwilmake/universal-oauth-provider/tree/main/x-oauth-provider/README.md)
 
 This X OAuth Provider uses the client's domain name as the client_id and automatically derives it from the `redirect_uri` (e.g., `https://example.com/callback` means `client_id` must equal `example.com`), eliminating the need for client registration while maintaining security through domain validation.
 
