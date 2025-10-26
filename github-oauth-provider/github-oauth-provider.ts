@@ -8,7 +8,7 @@ import {
   studioMiddleware,
 } from "queryable-object";
 
-const USER_DO_PREFIX = "user-v5:";
+const USER_DO_PREFIX = "user-v6:";
 
 export interface Env {
   SELF_CLIENT_ID: string;
@@ -30,6 +30,7 @@ export interface GitHubUser {
   login: string;
   name: string | null;
   avatar_url: string;
+  [key: string]: any;
 }
 
 export interface User {
@@ -40,9 +41,30 @@ export interface User {
 }
 
 const isQueryReadOnly = (query: string) => {
-  // TODO: refine this
   return query.toLowerCase().startsWith("select ");
 };
+
+// Helper function for CORS headers
+function getCorsHeaders(
+  allowedMethods: string[] = ["GET", "OPTIONS"]
+): Record<string, string> {
+  return {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": allowedMethods.join(", "),
+    "Access-Control-Allow-Headers":
+      "Content-Type, Authorization, MCP-Protocol-Version",
+  };
+}
+
+// Helper function for OPTIONS responses
+function handleOptionsRequest(
+  allowedMethods: string[] = ["GET", "OPTIONS"]
+): Response {
+  return new Response(null, {
+    status: 204,
+    headers: getCorsHeaders(allowedMethods),
+  });
+}
 
 @Queryable()
 export class UserDO extends DurableObject {
@@ -62,7 +84,6 @@ export class UserDO extends DurableObject {
         user_id TEXT PRIMARY KEY,
         login TEXT NOT NULL,
         name TEXT,
-        email TEXT,
         avatar_url TEXT,
         github_access_token TEXT NOT NULL,
         created_at INTEGER DEFAULT (unixepoch()),
@@ -85,19 +106,6 @@ export class UserDO extends DurableObject {
         FOREIGN KEY (user_id) REFERENCES users (user_id)
       )
     `);
-
-    // Set alarm for 10 minutes from now
-    this.storage.setAlarm(Date.now() + 10 * 60 * 1000);
-  }
-
-  async alarm() {
-    // Only self-delete if this is not a user storage (auth codes expire, users don't)
-    const hasUser = this.sql
-      .exec(`SELECT COUNT(*) as count FROM users`)
-      .toArray()[0];
-    if (!hasUser || hasUser.count === 0) {
-      await this.storage.deleteAll();
-    }
   }
 
   async setAuthData(
@@ -107,7 +115,6 @@ export class UserDO extends DurableObject {
     redirectUri: string,
     resource: string
   ) {
-    // Keep auth data storage unchanged (using KV storage)
     await this.storage.put("data", {
       github_access_token: githubAccessToken,
       userId,
@@ -118,7 +125,6 @@ export class UserDO extends DurableObject {
   }
 
   async getAuthData() {
-    // Keep auth data storage unchanged (using KV storage)
     return this.storage.get<{
       github_access_token: string;
       userId: string;
@@ -126,6 +132,36 @@ export class UserDO extends DurableObject {
       redirectUri: string;
       resource?: string;
     }>("data");
+  }
+
+  async getUserWithAccessToken(userId: string): Promise<{
+    user: GitHubUser;
+    githubAccessToken: string;
+  } | null> {
+    const result = this.sql
+      .exec(`SELECT * FROM users WHERE user_id = ?`, userId)
+      .toArray()[0];
+
+    if (!result) {
+      return null;
+    }
+
+    // Reconstruct user object
+    const additionalData = JSON.parse(
+      (result.additional_data as string) || "{}"
+    );
+    const user: GitHubUser = {
+      id: parseInt(result.user_id as string),
+      login: result.login as string,
+      name: result.name as string | null,
+      avatar_url: result.avatar_url as string,
+      ...additionalData,
+    };
+
+    return {
+      user,
+      githubAccessToken: result.github_access_token as string,
+    };
   }
 
   async setUser(user: GitHubUser, githubAccessToken: string) {
@@ -146,7 +182,7 @@ export class UserDO extends DurableObject {
       githubAccessToken,
       now,
       now,
-      id.toString(), // for COALESCE subquery
+      id.toString(),
       JSON.stringify(additionalData)
     );
   }
@@ -154,28 +190,10 @@ export class UserDO extends DurableObject {
   async createLogin(
     userId: string,
     clientId: string,
-    resource: string
-  ): Promise<string> {
-    // Get the user's GitHub access token
-    const user = this.sql
-      .exec(`SELECT github_access_token FROM users WHERE user_id = ?`, userId)
-      .toArray()[0];
-
-    if (!user) {
-      throw new Error("User not found");
-    }
-
-    const githubAccessToken = user.github_access_token as string;
-
-    const tokenData = `${userId};${resource};${githubAccessToken}`;
-    const encryptedData = await encrypt(tokenData, this.env.ENCRYPTION_SECRET);
-
-    // Create access token in format user_id:client_id:github_access_token
-    const accessToken = `simple_${encryptedData}`;
-
+    accessToken: string
+  ): Promise<void> {
     const now = Math.floor(Date.now() / 1000);
 
-    // Store login with last_active_at set to now
     this.sql.exec(
       `INSERT OR REPLACE INTO logins (access_token, user_id, client_id, last_active_at, session_count)
        VALUES (?, ?, ?, ?, COALESCE((SELECT session_count FROM logins WHERE access_token = ?), 1))`,
@@ -183,16 +201,14 @@ export class UserDO extends DurableObject {
       userId,
       clientId,
       now,
-      accessToken // for COALESCE subquery
+      accessToken
     );
-
-    return accessToken;
   }
 
   async updateActivity(accessToken: string): Promise<void> {
     const now = Math.floor(Date.now() / 1000);
-    const oneHourAgo = now - 3600; // 1 hour in seconds
-    const fourHoursAgo = now - 14400; // 4 hours in seconds
+    const oneHourAgo = now - 3600;
+    const fourHoursAgo = now - 14400;
 
     // Get current last_active_at for both login and user
     const loginResult = this.sql
@@ -221,39 +237,33 @@ export class UserDO extends DurableObject {
 
     // Update login activity
     if (loginLastActive < fourHoursAgo) {
-      // More than 4 hours old - increment session_count and update last_active_at
       this.sql.exec(
         `UPDATE logins SET last_active_at = ?, session_count = session_count + 1 WHERE access_token = ?`,
         now,
         accessToken
       );
     } else if (loginLastActive < oneHourAgo) {
-      // Between 1-4 hours old - only update last_active_at
       this.sql.exec(
         `UPDATE logins SET last_active_at = ? WHERE access_token = ?`,
         now,
         accessToken
       );
     }
-    // Less than 1 hour old - no update needed
 
     // Update user activity
     if (userLastActive < fourHoursAgo) {
-      // More than 4 hours old - increment session_count and update last_active_at
       this.sql.exec(
         `UPDATE users SET last_active_at = ?, session_count = session_count + 1 WHERE user_id = ?`,
         now,
         userId
       );
     } else if (userLastActive < oneHourAgo) {
-      // Between 1-4 hours old - only update last_active_at
       this.sql.exec(
         `UPDATE users SET last_active_at = ? WHERE user_id = ?`,
         now,
         userId
       );
     }
-    // Less than 1 hour old - no update needed
   }
 
   async getUser(): Promise<{
@@ -267,7 +277,6 @@ export class UserDO extends DurableObject {
       return null;
     }
 
-    // Reconstruct user object
     const additionalData = JSON.parse(
       (result.additional_data as string) || "{}"
     );
@@ -285,79 +294,11 @@ export class UserDO extends DurableObject {
     };
   }
 
-  async getUserByAccessToken(accessToken: string): Promise<{
-    user: GitHubUser;
-    githubAccessToken: string;
-    clientId: string;
-  } | null> {
-    try {
-      // Decrypt the access token to get user_id, client_id, and github_access_token
-      if (!accessToken.startsWith("simple_")) {
-        return null;
-      }
-
-      const encryptedData = accessToken.substring(7); // Remove 'simple_' prefix
-      const decryptedData = await decrypt(
-        encryptedData,
-        this.env.ENCRYPTION_SECRET
-      );
-      const [userId, resource, githubAccessToken] = decryptedData.split(";");
-      // Derive client_id from resource
-      const clientId = new URL(resource).hostname;
-
-      // Verify login exists
-      const loginResult = this.sql
-        .exec(
-          `SELECT * FROM logins WHERE access_token = ? AND user_id = ? AND client_id = ?`,
-          accessToken,
-          userId,
-          clientId
-        )
-        .toArray()[0];
-
-      if (!loginResult) {
-        return null;
-      }
-
-      // Get user data
-      const userResult = this.sql
-        .exec(`SELECT * FROM users WHERE user_id = ?`, userId)
-        .toArray()[0];
-
-      if (!userResult) {
-        return null;
-      }
-
-      // Reconstruct user object
-      const additionalData = JSON.parse(
-        (userResult.additional_data as string) || "{}"
-      );
-      const user: GitHubUser = {
-        id: parseInt(userResult.user_id as string),
-        login: userResult.login as string,
-        name: userResult.name as string | null,
-        avatar_url: userResult.avatar_url as string,
-        ...additionalData,
-      };
-
-      return {
-        user,
-        githubAccessToken,
-        clientId,
-      };
-    } catch (error) {
-      console.error("Error decrypting access token:", error);
-      return null;
-    }
-  }
-
   async setMetadata<T>(metadata: T) {
-    // Keep metadata storage unchanged (using KV storage)
     await this.storage.put("metadata", metadata);
   }
 
   async getMetadata<T>(): Promise<T | null> {
-    // Keep metadata storage unchanged (using KV storage)
     const metadata = await this.storage.get<T>("metadata");
     if (!metadata) {
       return null;
@@ -368,7 +309,6 @@ export class UserDO extends DurableObject {
 
 /**
  * Handle OAuth requests including MCP-required metadata endpoints.
- * Handles /authorize, /token, /callback, /logout, /me, and metadata endpoints.
  */
 export async function handleOAuth(
   request: Request,
@@ -389,33 +329,17 @@ export async function handleOAuth(
     !env.UserDO
   ) {
     return new Response(
-      `Environment misconfigured. Ensure to have GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, SELF_CLIENT_ID, and ADMIN_GITHUB_USERNAME secrets set, as well as the Durable Object, with:
-
-[[durable_objects.bindings]]
-name = "UserDO"
-class_name = "UserDO"
-
-[[migrations]]
-new_sqlite_classes = ["UserDO"]
-tag = "v1"
-
-      `,
+      `Environment misconfigured. Ensure to have GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, SELF_CLIENT_ID, and ADMIN_GITHUB_USERNAME secrets set, as well as the Durable Object.`,
       { status: 500 }
     );
   }
 
-  if (request.method === "OPTIONS") {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, OPTIONS",
-        "Access-Control-Allow-Headers":
-          "Content-Type, Authorization, MCP-Protocol-Version",
-      },
-    });
-  }
   if (path === "/admin") {
+    if (request.method === "OPTIONS") {
+      return handleOptionsRequest(["GET", "POST", "OPTIONS"]);
+    }
+
+    const corsHeaders = getCorsHeaders(["GET", "POST", "OPTIONS"]);
     const accessToken = getAccessToken(request);
     const resourceMetadataUrl = `${url.origin}/.well-known/oauth-protected-resource`;
 
@@ -428,13 +352,14 @@ tag = "v1"
         {
           status: 401,
           headers: {
-            "WWW-Authenticate": `Bearer realm="main", resource_metadata="${resourceMetadataUrl}`,
+            ...corsHeaders,
+            "Content-Type": "application/json",
+            "WWW-Authenticate": `Bearer realm="main", resource_metadata="${resourceMetadataUrl}"`,
           },
         }
       );
     }
 
-    // Decrypt access token to get user_id
     try {
       if (!accessToken.startsWith("simple_")) {
         throw new Error("Invalid access token format");
@@ -454,7 +379,10 @@ tag = "v1"
       );
       const userData = await userDO.getUser();
       if (userData?.user?.login !== env.ADMIN_GITHUB_USERNAME) {
-        return new Response("Only admin can view DB", { status: 401 });
+        return new Response("Only admin can view DB", {
+          status: 401,
+          headers: corsHeaders,
+        });
       }
 
       const stub = getMultiStub(
@@ -473,17 +401,22 @@ tag = "v1"
         { dangerouslyDisableAuth: true }
       );
     } catch (error) {
-      return new Response("Invalid access token", { status: 401 });
+      return new Response("Invalid access token", {
+        status: 401,
+        headers: corsHeaders,
+      });
     }
   }
 
-  // MCP Required: OAuth 2.0 Authorization Server Metadata (RFC8414)
   if (path === "/.well-known/oauth-authorization-server") {
+    if (request.method === "OPTIONS") {
+      return handleOptionsRequest();
+    }
+
     const metadata = {
       issuer: url.origin,
       authorization_endpoint: `${url.origin}/authorize`,
       token_endpoint: `${url.origin}/token`,
-      // Public client without secret
       token_endpoint_auth_methods_supported: ["none"],
       registration_endpoint: `${url.origin}/register`,
       response_types_supported: ["code"],
@@ -494,15 +427,17 @@ tag = "v1"
 
     return new Response(JSON.stringify(metadata, null, 2), {
       headers: {
+        ...getCorsHeaders(),
         "Content-Type": "application/json",
-        "Cache-Control": "public, max-age=3600",
-        "Access-Control-Allow-Origin": "*",
       },
     });
   }
 
-  // Protected resource metadata endpoint
   if (path === "/.well-known/oauth-protected-resource") {
+    if (request.method === "OPTIONS") {
+      return handleOptionsRequest();
+    }
+
     const metadata = {
       resource: url.origin,
       authorization_servers: [url.origin],
@@ -513,22 +448,29 @@ tag = "v1"
 
     return new Response(JSON.stringify(metadata, null, 2), {
       headers: {
+        ...getCorsHeaders(),
         "Content-Type": "application/json",
-        "Cache-Control": "public, max-age=3600",
-        "Access-Control-Allow-Origin": "*",
       },
     });
   }
 
   if (path === "/register") {
+    if (request.method === "OPTIONS") {
+      return handleOptionsRequest(["POST", "OPTIONS"]);
+    }
+
+    const corsHeaders = getCorsHeaders(["POST", "OPTIONS"]);
+
     if (request.method !== "POST") {
-      return new Response("Method not allowed", { status: 405 });
+      return new Response("Method not allowed", {
+        status: 405,
+        headers: corsHeaders,
+      });
     }
 
     try {
       const body = await request.json();
 
-      // Validate redirect_uris is present and is an array
       if (
         !body.redirect_uris ||
         !Array.isArray(body.redirect_uris) ||
@@ -542,19 +484,18 @@ tag = "v1"
           {
             status: 400,
             headers: {
+              ...corsHeaders,
               "Content-Type": "application/json",
-              "Access-Control-Allow-Origin": "*",
             },
           }
         );
       }
 
-      // Extract hosts from all redirect URIs
-      const hosts = new Set();
+      const hostnames = new Set();
       for (const uri of body.redirect_uris) {
         try {
           const url = new URL(uri);
-          hosts.add(url.host);
+          hostnames.add(url.hostname);
         } catch (e) {
           return new Response(
             JSON.stringify({
@@ -564,38 +505,36 @@ tag = "v1"
             {
               status: 400,
               headers: {
+                ...corsHeaders,
                 "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*",
               },
             }
           );
         }
       }
 
-      // Ensure all redirect URIs have the same host
-      if (hosts.size < 1) {
+      if (hostnames.size < 1) {
         return new Response(
           JSON.stringify({
             error: "invalid_client_metadata",
-            error_description: "Must have at least one host",
+            error_description: "Less than 1 redirect uri",
           }),
           {
             status: 400,
             headers: {
+              ...corsHeaders,
               "Content-Type": "application/json",
-              "Access-Control-Allow-Origin": "*",
             },
           }
         );
       }
 
-      const clientHost = Array.from(hosts)[0];
+      const clientHost = Array.from(hostnames)[0];
 
-      // Response with client_id as the host
       const response = {
         client_id: clientHost,
         redirect_uris: body.redirect_uris,
-        token_endpoint_auth_method: "none", // Public client, no secret needed
+        token_endpoint_auth_method: "none",
         grant_types: ["authorization_code"],
         response_types: ["code"],
       };
@@ -603,9 +542,9 @@ tag = "v1"
       return new Response(JSON.stringify(response, null, 2), {
         status: 201,
         headers: {
+          ...corsHeaders,
           "Content-Type": "application/json",
           "Cache-Control": "no-store",
-          "Access-Control-Allow-Origin": "*",
           Pragma: "no-cache",
         },
       });
@@ -618,8 +557,8 @@ tag = "v1"
         {
           status: 400,
           headers: {
+            ...corsHeaders,
             "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
           },
         }
       );
@@ -643,21 +582,27 @@ tag = "v1"
   }
 
   if (path === "/logout") {
+    if (request.method === "OPTIONS") {
+      return handleOptionsRequest();
+    }
+
     const url = new URL(request.url);
     const redirectTo = url.searchParams.get("redirect_to") || "/";
+    const secureFlag = isLocalhost(request) ? "" : " Secure;";
+
     return new Response(null, {
       status: 302,
       headers: {
+        ...getCorsHeaders(),
         Location: redirectTo,
-        "Set-Cookie": `access_token=; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0; Path=/`,
+        "Set-Cookie": `access_token=; HttpOnly;${secureFlag} SameSite=${sameSite}; Max-Age=0; Path=/`,
       },
     });
   }
 
-  return null; // Not an OAuth route, let other handlers take over
+  return null;
 }
 
-// Handle /me endpoint to return current user information
 async function handleMe(
   request: Request,
   env: Env,
@@ -665,27 +610,27 @@ async function handleMe(
 ): Promise<Response> {
   const url = new URL(request.url);
 
+  if (request.method === "OPTIONS") {
+    return handleOptionsRequest();
+  }
+
+  const corsHeaders = getCorsHeaders();
+
   if (request.method !== "GET") {
     return new Response(JSON.stringify({ error: "method_not_allowed" }), {
       status: 405,
       headers: {
+        ...corsHeaders,
         "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*",
       },
     });
   }
-
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*",
-  };
 
   const resourceMetadataUrl = `${url.origin}/.well-known/oauth-protected-resource`;
   const loginUrl = `${url.origin}/authorize?redirect_to=${encodeURIComponent(
     request.url
   )}`;
 
-  // Get access token from request
   const accessToken = getAccessToken(request);
   if (!accessToken) {
     return new Response(
@@ -696,7 +641,8 @@ async function handleMe(
       {
         status: 401,
         headers: {
-          ...headers,
+          ...corsHeaders,
+          "Content-Type": "application/json",
           "WWW-Authenticate": `Bearer realm="main", login_url="${loginUrl}", resource_metadata="${resourceMetadataUrl}"`,
         },
       }
@@ -704,7 +650,6 @@ async function handleMe(
   }
 
   try {
-    // Decrypt access token to get user_id
     if (!accessToken.startsWith("simple_")) {
       throw new Error("Invalid access token format");
     }
@@ -713,7 +658,6 @@ async function handleMe(
     const decryptedData = await decrypt(encryptedData, env.ENCRYPTION_SECRET);
     const [userId] = decryptedData.split(";");
 
-    // Get user data from Durable Object using user_id
     const userDO = getMultiStub(
       env.UserDO,
       [
@@ -723,10 +667,9 @@ async function handleMe(
       ctx
     );
 
-    // Update activity before getting user data
     await userDO.updateActivity(accessToken);
 
-    const userData = await userDO.getUserByAccessToken(accessToken);
+    const userData = await userDO.getUserWithAccessToken(userId);
 
     if (!userData) {
       return new Response(
@@ -737,14 +680,14 @@ async function handleMe(
         {
           status: 401,
           headers: {
-            ...headers,
+            ...corsHeaders,
+            "Content-Type": "application/json",
             "WWW-Authenticate": `Bearer realm="main", error="invalid_token", login_url="${loginUrl}", resource_metadata="${resourceMetadataUrl}"`,
           },
         }
       );
     }
 
-    // Transform GitHub user to the required format
     const user: User = {
       id: userData.user.id.toString(),
       name: userData.user.name || userData.user.login,
@@ -752,8 +695,12 @@ async function handleMe(
       profile_image_url: userData.user.avatar_url || undefined,
     };
 
-    // Return user information
-    return new Response(JSON.stringify(user), { headers });
+    return new Response(JSON.stringify(user), {
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json",
+      },
+    });
   } catch (error) {
     console.error("Error retrieving user data:", error);
     return new Response(
@@ -761,7 +708,13 @@ async function handleMe(
         error: "server_error",
         error_description: "Internal server error",
       }),
-      { status: 500, headers }
+      {
+        status: 500,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
+      }
     );
   }
 }
@@ -773,29 +726,30 @@ async function handleAuthorize(
   sameSite: string,
   allowedClients: string[] | undefined
 ): Promise<Response> {
+  if (request.method === "OPTIONS") {
+    return handleOptionsRequest();
+  }
+
   const url = new URL(request.url);
   const clientId = url.searchParams.get("client_id");
   let redirectUri = url.searchParams.get("redirect_uri");
   const responseType = url.searchParams.get("response_type") || "code";
   const state = url.searchParams.get("state");
   const resource = url.searchParams.get("resource");
+  const secureFlag = isLocalhost(request) ? "" : " Secure;";
 
-  // If no client_id, this is a direct login request
+  // Direct login request
   if (!clientId) {
-    const url = new URL(request.url);
     const redirectTo = url.searchParams.get("redirect_to") || "/";
     const resource = url.searchParams.get("resource");
     const requestedScope = url.searchParams.get("scope") || scope;
 
-    // Generate PKCE code verifier and challenge
     const codeVerifier = generateCodeVerifier();
     const codeChallenge = await generateCodeChallenge(codeVerifier);
 
-    // Create state with redirect info, code verifier, and resource
-    const state: OAuthState = { redirectTo, codeVerifier, resource };
+    const state: OAuthState = { codeVerifier, resource };
     const stateString = btoa(JSON.stringify(state));
 
-    // Build GitHub OAuth URL
     const githubUrl = new URL("https://github.com/login/oauth/authorize");
     githubUrl.searchParams.set("client_id", env.GITHUB_CLIENT_ID);
     githubUrl.searchParams.set("redirect_uri", `${url.origin}/callback`);
@@ -804,39 +758,50 @@ async function handleAuthorize(
     githubUrl.searchParams.set("code_challenge", codeChallenge);
     githubUrl.searchParams.set("code_challenge_method", "S256");
 
-    return new Response(null, {
-      status: 302,
-      headers: {
-        Location: githubUrl.toString(),
-        "Set-Cookie": `oauth_state=${encodeURIComponent(
-          stateString
-        )}; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=600; Path=/`,
-      },
+    const headers = new Headers({
+      ...getCorsHeaders(),
+      Location: githubUrl.toString(),
     });
+
+    headers.append(
+      "Set-Cookie",
+      `oauth_state=${encodeURIComponent(
+        stateString
+      )}; HttpOnly;${secureFlag} SameSite=${sameSite}; Max-Age=600; Path=/`
+    );
+    headers.append(
+      "Set-Cookie",
+      `redirect_to=${encodeURIComponent(
+        redirectTo
+      )}; HttpOnly;${secureFlag} SameSite=${sameSite}; Max-Age=600; Path=/`
+    );
+
+    return new Response(null, { status: 302, headers });
   }
 
-  // // Validate that client_id looks like a domain
-  // if (!isValidDomain(clientId) && clientId !== "localhost") {
-  //   return new Response("Invalid client_id: must be a valid domain", {
-  //     status: 400,
-  //   });
-  // }
+  if (!isValidDomain(clientId) && clientId !== "localhost") {
+    return new Response("Invalid client_id: must be a valid domain", {
+      status: 400,
+      headers: getCorsHeaders(),
+    });
+  }
 
   if (allowedClients !== undefined && !allowedClients.includes(clientId)) {
     return new Response(
       `This provider restricts client_ids that can be used, and ${clientId} is not one of them. Allowed client_ids: ${allowedClients.join(
         ", "
       )}`,
-      { status: 400 }
+      {
+        status: 400,
+        headers: getCorsHeaders(),
+      }
     );
   }
 
-  // If no redirect_uri provided, use default pattern
   if (!redirectUri) {
     redirectUri = `https://${clientId}/callback`;
   }
 
-  // Validate redirect_uri is HTTPS and on same origin as client_id
   try {
     const redirectUrl = new URL(redirectUri);
 
@@ -845,31 +810,32 @@ async function handleAuthorize(
       redirectUrl.hostname !== "localhost" &&
       redirectUrl.hostname !== "127.0.0.1"
     ) {
-      return new Response("Invalid redirect_uri: must use HTTPS", {
-        status: 400,
-      });
-    }
-
-    if (redirectUrl.host !== clientId) {
       return new Response(
-        "Invalid redirect_uri: must be on same origin as client_id",
-        { status: 400 }
+        "Invalid redirect_uri: must use HTTPS unless localhost/127.0.0.1",
+        {
+          status: 400,
+          headers: getCorsHeaders(),
+        }
       );
     }
   } catch {
-    return new Response("Invalid redirect_uri format", { status: 400 });
+    return new Response("Invalid redirect_uri format", {
+      status: 400,
+      headers: getCorsHeaders(),
+    });
   }
 
-  // Only support authorization code flow
   if (responseType !== "code") {
-    return new Response("Unsupported response_type", { status: 400 });
+    return new Response("Unsupported response_type", {
+      status: 400,
+      headers: getCorsHeaders(),
+    });
   }
 
   // Check if user is already authenticated
   const accessToken = getAccessToken(request);
   if (accessToken) {
     try {
-      // Decrypt access token to get user_id
       if (!accessToken.startsWith("simple_")) {
         throw new Error("Invalid access token format");
       }
@@ -878,7 +844,6 @@ async function handleAuthorize(
       const decryptedData = await decrypt(encryptedData, env.ENCRYPTION_SECRET);
       const [userId] = decryptedData.split(";");
 
-      // User is already authenticated, create auth code and redirect
       return await createAuthCodeAndRedirect(
         env,
         clientId,
@@ -892,8 +857,7 @@ async function handleAuthorize(
     }
   }
 
-  // User not authenticated, redirect to GitHub OAuth with our callback
-  // Store the OAuth provider request details for after GitHub auth
+  // User not authenticated, redirect to GitHub OAuth
   const providerState = {
     clientId,
     redirectUri,
@@ -904,19 +868,16 @@ async function handleAuthorize(
 
   const providerStateString = btoa(JSON.stringify(providerState));
 
-  // Generate PKCE for GitHub OAuth
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = await generateCodeChallenge(codeVerifier);
 
   const githubState: OAuthState = {
-    redirectTo: url.pathname + url.search, // Return to this authorize request after GitHub auth
     codeVerifier,
     resource,
   };
 
   const githubStateString = btoa(JSON.stringify(githubState));
 
-  // Build GitHub OAuth URL
   const githubUrl = new URL("https://github.com/login/oauth/authorize");
   githubUrl.searchParams.set("client_id", env.GITHUB_CLIENT_ID);
   githubUrl.searchParams.set("redirect_uri", `${url.origin}/callback`);
@@ -925,18 +886,30 @@ async function handleAuthorize(
   githubUrl.searchParams.set("code_challenge", codeChallenge);
   githubUrl.searchParams.set("code_challenge_method", "S256");
 
-  const headers = new Headers({ Location: githubUrl.toString() });
+  const headers = new Headers({
+    ...getCorsHeaders(),
+    Location: githubUrl.toString(),
+  });
+
   headers.append(
     "Set-Cookie",
     `oauth_state=${encodeURIComponent(
       githubStateString
-    )}; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=600; Path=/`
+    )}; HttpOnly;${secureFlag} SameSite=${sameSite}; Max-Age=600; Path=/`
   );
   headers.append(
     "Set-Cookie",
     `provider_state=${encodeURIComponent(
       providerStateString
-    )}; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=600; Path=/`
+    )}; HttpOnly;${secureFlag} SameSite=${sameSite}; Max-Age=600; Path=/`
+  );
+
+  const redirectTo = url.pathname + url.search;
+  headers.append(
+    "Set-Cookie",
+    `redirect_to=${encodeURIComponent(
+      redirectTo
+    )}; HttpOnly;${secureFlag} SameSite=${sameSite}; Max-Age=600; Path=/`
   );
 
   return new Response(null, { status: 302, headers });
@@ -950,32 +923,28 @@ async function createAuthCodeAndRedirect(
   userId: string,
   resource: string
 ): Promise<Response> {
-  // Generate auth code
-  const authCode = generateCodeVerifier(); // Reuse the same random generation
+  const authCode = generateCodeVerifier();
 
-  // Get user's GitHub access token from user DO
   const userDO = env.UserDO.get(
     env.UserDO.idFromName(`${USER_DO_PREFIX}${userId}`)
   );
-  const userData = await userDO.getUser();
+  const userData = await userDO.getUserWithAccessToken(userId);
 
   if (!userData) {
     throw new Error("User not found");
   }
 
-  // Create Durable Object for this auth code with "code:" prefix
   const id = env.UserDO.idFromName(`code:${authCode}`);
   const authCodeDO = env.UserDO.get(id);
 
   await authCodeDO.setAuthData(
     userData.githubAccessToken,
-    userId, // Store user_id instead of encrypted access token
+    userId,
     clientId,
     redirectUri,
     resource
   );
 
-  // Redirect back to client with auth code
   const redirectUrl = new URL(redirectUri);
   redirectUrl.searchParams.set("code", authCode);
   if (state) {
@@ -984,7 +953,10 @@ async function createAuthCodeAndRedirect(
 
   return new Response(null, {
     status: 302,
-    headers: { Location: redirectUrl.toString() },
+    headers: {
+      ...getCorsHeaders(),
+      Location: redirectUrl.toString(),
+    },
   });
 }
 
@@ -994,53 +966,59 @@ async function handleToken(
   ctx: ExecutionContext,
   scope: string
 ): Promise<Response> {
+  if (request.method === "OPTIONS") {
+    return handleOptionsRequest(["POST", "OPTIONS"]);
+  }
+
+  const corsHeaders = getCorsHeaders(["POST", "OPTIONS"]);
+
   if (request.method !== "POST") {
     return new Response("Method not allowed", {
       status: 405,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-      },
+      headers: corsHeaders,
     });
   }
 
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*",
-  };
   const formData = await request.formData();
   const grantType = formData.get("grant_type");
   const code = formData.get("code");
   const clientId = formData.get("client_id");
   const redirectUri = formData.get("redirect_uri");
-  const resource = formData.get("resource"); // MCP Required: Resource parameter
+  const resource = formData.get("resource");
 
   if (grantType !== "authorization_code") {
     return new Response(JSON.stringify({ error: "unsupported_grant_type" }), {
       status: 400,
-      headers,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json",
+      },
     });
   }
 
   if (!code || !clientId) {
     return new Response(JSON.stringify({ error: "invalid_request" }), {
       status: 400,
-      headers,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json",
+      },
     });
   }
 
-  // Validate client_id is a valid domain
-  // if (
-  //   !isValidDomain(clientId.toString()) &&
-  //   clientId.toString() !== "localhost"
-  // ) {
-  //   console.log(clientId.toString(), "invalid_client");
-  //   return new Response(JSON.stringify({ error: "invalid_client" }), {
-  //     status: 400,
-  //     headers,
-  //   });
-  // }
+  if (
+    !isValidDomain(clientId.toString()) &&
+    clientId.toString() !== "localhost"
+  ) {
+    return new Response(JSON.stringify({ error: "invalid_client" }), {
+      status: 400,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json",
+      },
+    });
+  }
 
-  // Get auth code data from Durable Object with "code:" prefix
   const id = env.UserDO.idFromName(`code:${code.toString()}`);
   const authCodeDO = env.UserDO.get(id);
   const authData = await authCodeDO.getAuthData();
@@ -1053,12 +1031,14 @@ async function handleToken(
       }),
       {
         status: 400,
-        headers,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
       }
     );
   }
 
-  // Validate client_id and redirect_uri match
   if (
     authData.clientId !== clientId ||
     (redirectUri && authData.redirectUri !== redirectUri)
@@ -1070,24 +1050,58 @@ async function handleToken(
       }),
       {
         status: 400,
-        headers,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
       }
     );
   }
 
-  // MCP Required: Validate resource parameter matches if provided
   if (!resource || authData.resource !== resource) {
-    console.error({ resource, authResource: authData.resource });
     return new Response(
       JSON.stringify({
         error: "invalid_grant",
         message: `Invalid resource`,
       }),
-      { status: 400, headers }
+      {
+        status: 400,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
+      }
     );
   }
 
-  const userDO = getMultiStub(
+  const userDO = env.UserDO.get(
+    env.UserDO.idFromName(`${USER_DO_PREFIX}${authData.userId}`)
+  );
+  const userData = await userDO.getUserWithAccessToken(authData.userId);
+
+  if (!userData) {
+    return new Response(
+      JSON.stringify({
+        error: "invalid_grant",
+        message: "User not found",
+      }),
+      {
+        status: 400,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+  }
+
+  // Create encrypted access token in worker (deterministic)
+  const tokenData = `${authData.userId};${authData.resource};${userData.githubAccessToken}`;
+  const encryptedData = await encrypt(tokenData, env.ENCRYPTION_SECRET);
+  const accessToken = `simple_${encryptedData}`;
+
+  // Store login in aggregate DO
+  const multistub = getMultiStub(
     env.UserDO,
     [
       { name: `${USER_DO_PREFIX}${authData.userId}` },
@@ -1096,21 +1110,24 @@ async function handleToken(
     ctx
   );
 
-  // Create new access token for this client
-  const accessToken = await userDO.createLogin(
+  await multistub.createLogin(
     authData.userId,
     clientId.toString(),
-    authData.resource
+    accessToken
   );
 
-  // Return the new access token
   return new Response(
     JSON.stringify({
       access_token: accessToken,
       token_type: "bearer",
       scope,
     }),
-    { headers }
+    {
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json",
+      },
+    }
   );
 }
 
@@ -1120,29 +1137,49 @@ async function handleCallback(
   ctx: ExecutionContext,
   sameSite: string
 ): Promise<Response> {
+  if (request.method === "OPTIONS") {
+    return handleOptionsRequest();
+  }
+
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const stateParam = url.searchParams.get("state");
+  const secureFlag = isLocalhost(request) ? "" : " Secure;";
 
   if (!code || !stateParam) {
-    return new Response("Missing code or state parameter", { status: 400 });
+    return new Response("Missing code or state parameter", {
+      status: 400,
+      headers: getCorsHeaders(),
+    });
   }
 
-  // Get state from cookie
   const cookies = parseCookies(request.headers.get("Cookie") || "");
   const stateCookie = cookies.oauth_state;
   const providerStateCookie = cookies.provider_state;
+  const redirectToCookie = cookies.redirect_to;
 
-  if (!stateCookie || stateCookie !== stateParam) {
-    return new Response("Invalid state parameter", { status: 400 });
+  if (!stateCookie) {
+    return new Response("Missing state cookie", {
+      status: 400,
+      headers: getCorsHeaders(),
+    });
   }
 
-  // Parse state
   let state: OAuthState;
   try {
-    state = JSON.parse(atob(stateParam));
+    state = JSON.parse(atob(stateCookie));
   } catch {
-    return new Response("Invalid state format", { status: 400 });
+    return new Response("Invalid state format", {
+      status: 400,
+      headers: getCorsHeaders(),
+    });
+  }
+
+  if (stateCookie !== stateParam) {
+    return new Response("Invalid state parameter", {
+      status: 400,
+      headers: getCorsHeaders(),
+    });
   }
 
   // Exchange code for token with GitHub
@@ -1167,7 +1204,10 @@ async function handleCallback(
   const tokenData = (await tokenResponse.json()) as any;
 
   if (!tokenData.access_token) {
-    return new Response("Failed to get access token", { status: 400 });
+    return new Response("Failed to get access token", {
+      status: 400,
+      headers: getCorsHeaders(),
+    });
   }
 
   // Get user info from GitHub
@@ -1179,12 +1219,14 @@ async function handleCallback(
   });
 
   if (!userResponse.ok) {
-    return new Response("Failed to get user info", { status: 400 });
+    return new Response("Failed to get user info", {
+      status: 400,
+      headers: getCorsHeaders(),
+    });
   }
 
   const user = (await userResponse.json()) as GitHubUser;
-  console.log({ user });
-  // Store user in their DO - this will set last_active_at to now
+
   const userDO = getMultiStub(
     env.UserDO,
     [
@@ -1200,7 +1242,6 @@ async function handleCallback(
     try {
       const providerState = JSON.parse(atob(providerStateCookie));
 
-      // Create auth code and redirect back to client
       const response = await createAuthCodeAndRedirect(
         env,
         providerState.clientId,
@@ -1210,26 +1251,33 @@ async function handleCallback(
         providerState.resource
       );
 
-      // Create access token for this client for cookie-based access
-      const accessToken = await userDO.createLogin(
+      // Create access token for this client (deterministic)
+      const newTokenData = `${user.id};${providerState.resource};${tokenData.access_token}`;
+      const encryptedData = await encrypt(newTokenData, env.ENCRYPTION_SECRET);
+      const accessToken = `simple_${encryptedData}`;
+
+      await userDO.createLogin(
         user.id.toString(),
         providerState.clientId,
-        providerState.resource
+        accessToken
       );
 
-      // Set access token cookie and clear state cookies
       const headers = new Headers(response.headers);
       headers.append(
         "Set-Cookie",
-        `oauth_state=; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0; Path=/`
+        `oauth_state=; HttpOnly;${secureFlag} SameSite=${sameSite}; Max-Age=0; Path=/`
       );
       headers.append(
         "Set-Cookie",
-        `provider_state=; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0; Path=/`
+        `provider_state=; HttpOnly;${secureFlag} SameSite=${sameSite}; Max-Age=0; Path=/`
       );
       headers.append(
         "Set-Cookie",
-        `access_token=${accessToken}; HttpOnly; Secure; Max-Age=34560000; SameSite=${sameSite}; Path=/`
+        `redirect_to=; HttpOnly;${secureFlag} SameSite=${sameSite}; Max-Age=0; Path=/`
+      );
+      headers.append(
+        "Set-Cookie",
+        `access_token=${accessToken}; HttpOnly;${secureFlag} Max-Age=34560000; SameSite=${sameSite}; Path=/`
       );
 
       return new Response(response.body, { status: response.status, headers });
@@ -1238,44 +1286,55 @@ async function handleCallback(
     }
   }
 
-  // Normal redirect (direct login) - create access token for browser client
-  const browserAccessToken = await userDO.createLogin(
+  // Normal redirect (direct login) - create access token for browser client (deterministic)
+  const browserTokenData = `${user.id};https://${env.SELF_CLIENT_ID};${tokenData.access_token}`;
+  const browserEncryptedData = await encrypt(
+    browserTokenData,
+    env.ENCRYPTION_SECRET
+  );
+  const browserAccessToken = `simple_${browserEncryptedData}`;
+
+  await userDO.createLogin(
     user.id.toString(),
     env.SELF_CLIENT_ID,
-    // resource is your own hostname
-    `https://${env.SELF_CLIENT_ID}`
+    browserAccessToken
   );
 
-  const headers = new Headers({ Location: state.redirectTo || "/" });
+  const redirectTo = redirectToCookie
+    ? decodeURIComponent(redirectToCookie)
+    : "/";
+
+  const headers = new Headers({
+    ...getCorsHeaders(),
+    Location: redirectTo,
+  });
+
   headers.append(
     "Set-Cookie",
-    `oauth_state=; HttpOnly; Secure; SameSite=${sameSite}; Max-Age=0; Path=/`
+    `oauth_state=; HttpOnly;${secureFlag} SameSite=${sameSite}; Max-Age=0; Path=/`
   );
   headers.append(
     "Set-Cookie",
-    `access_token=${browserAccessToken}; HttpOnly; Secure; Max-Age=34560000; SameSite=${sameSite}; Path=/`
+    `redirect_to=; HttpOnly;${secureFlag} SameSite=${sameSite}; Max-Age=0; Path=/`
+  );
+  headers.append(
+    "Set-Cookie",
+    `access_token=${browserAccessToken}; HttpOnly;${secureFlag} Max-Age=34560000; SameSite=${sameSite}; Path=/`
   );
 
   return new Response(null, { status: 302, headers });
 }
 
-/**
- * Extract access token from request cookies or Authorization header.
- * Use this to check if a user is authenticated.
- */
 export function getAccessToken(request: Request): string | null {
-  // Check Authorization header first (MCP clients may use this)
   const authHeader = request.headers.get("Authorization");
   if (authHeader?.startsWith("Bearer ")) {
     return authHeader.substring(7);
   }
 
-  // Fallback to cookie for browser clients
   const cookies = parseCookies(request.headers.get("Cookie") || "");
   return cookies.access_token || null;
 }
 
-// Utility functions
 function parseCookies(cookieHeader: string): Record<string, string> {
   const cookies: Record<string, string> = {};
 
@@ -1290,7 +1349,6 @@ function parseCookies(cookieHeader: string): Record<string, string> {
 }
 
 function isValidDomain(domain: string): boolean {
-  // Basic domain validation - must contain at least one dot and valid characters
   const domainRegex =
     /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
   return (
@@ -1320,10 +1378,13 @@ async function generateCodeChallenge(verifier: string): Promise<string> {
     .replace(/=/g, "");
 }
 
-// Encryption utilities
 async function encrypt(text: string, secret: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(text);
+
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+
   const keyMaterial = await crypto.subtle.importKey(
     "raw",
     encoder.encode(secret),
@@ -1332,7 +1393,6 @@ async function encrypt(text: string, secret: string): Promise<string> {
     ["deriveKey"]
   );
 
-  const salt = crypto.getRandomValues(new Uint8Array(16));
   const key = await crypto.subtle.deriveKey(
     {
       name: "PBKDF2",
@@ -1346,14 +1406,12 @@ async function encrypt(text: string, secret: string): Promise<string> {
     ["encrypt"]
   );
 
-  const iv = crypto.getRandomValues(new Uint8Array(12));
   const encrypted = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv: iv },
     key,
     data
   );
 
-  // Combine salt + iv + encrypted data
   const combined = new Uint8Array(
     salt.length + iv.length + encrypted.byteLength
   );
@@ -1371,14 +1429,12 @@ async function decrypt(encrypted: string, secret: string): Promise<string> {
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
 
-  // Decode the base64url
   const combined = new Uint8Array(
     atob(encrypted.replace(/-/g, "+").replace(/_/g, "/"))
       .split("")
       .map((c) => c.charCodeAt(0))
   );
 
-  // Extract salt, iv, and encrypted data
   const salt = combined.slice(0, 16);
   const iv = combined.slice(16, 28);
   const data = combined.slice(28);
@@ -1413,13 +1469,20 @@ async function decrypt(encrypted: string, secret: string): Promise<string> {
   return decoder.decode(decrypted);
 }
 
+function isLocalhost(request: Request) {
+  const url = new URL(request.url);
+  return (
+    url.hostname === "localhost" ||
+    url.hostname === "127.0.0.1" ||
+    request.headers.get("cf-connecting-ip") === "::1" ||
+    request.headers.get("cf-connecting-ip") === "127.0.0.1"
+  );
+}
+
 export interface UserContext<T = { [key: string]: any }>
   extends ExecutionContext {
-  /** Should contain authenticated GitHub User */
   user: GitHubUser | undefined;
-  /** GitHub Access token */
   githubAccessToken: string | undefined;
-  /** Access token. Can be decrypted with client secret to retrieve GitHub access token */
   accessToken: string | undefined;
   registered: boolean;
   getMetadata?: () => Promise<T>;
@@ -1432,17 +1495,12 @@ interface UserFetchHandler<TEnv = {}, TMetadata = { [key: string]: any }> {
     | Promise<Response>;
 }
 
-/** Easiest way to add oauth with required login! */
 export function withSimplerAuth<TEnv = {}, TMetadata = { [key: string]: any }>(
   handler: UserFetchHandler<TEnv, TMetadata>,
   config?: {
-    /** If true, login will be forced and user will always be present */
     isLoginRequired?: boolean;
-    /** Defaults to "user:email" meaning you get the user info and emails */
     scope?: string;
-    /** Defaults to 'Lax' meaning subdomains are also valid to use the cookies */
     sameSite?: "Strict" | "Lax";
-    /** If provided, only clients with these hostnames will be able to use this service to retrieve profile information. If not provided, any client will be able to */
     allowedClients?: string[];
   }
 ): ExportedHandlerFetchHandler<Env & TEnv> {
@@ -1465,7 +1523,6 @@ export function withSimplerAuth<TEnv = {}, TMetadata = { [key: string]: any }>(
       return oauth;
     }
 
-    // Get user from access token
     let userDO: DurableObjectStub<UserDO>;
 
     let user: GitHubUser | undefined = undefined;
@@ -1474,7 +1531,6 @@ export function withSimplerAuth<TEnv = {}, TMetadata = { [key: string]: any }>(
     const accessToken = getAccessToken(request);
     if (accessToken) {
       try {
-        // Decrypt access token to get user_id
         if (!accessToken.startsWith("simple_")) {
           throw new Error("Invalid access token format");
         }
@@ -1486,7 +1542,6 @@ export function withSimplerAuth<TEnv = {}, TMetadata = { [key: string]: any }>(
         );
         const [userId] = decryptedData.split(";");
 
-        // Get user data from Durable Object using user_id
         userDO = getMultiStub(
           env.UserDO,
           [
@@ -1496,13 +1551,12 @@ export function withSimplerAuth<TEnv = {}, TMetadata = { [key: string]: any }>(
           ctx
         );
 
-        // Update activity before getting user data (except for /me endpoint which handles it separately)
         const url = new URL(request.url);
         if (url.pathname !== "/me") {
           await userDO.updateActivity(accessToken);
         }
 
-        const userData = await userDO.getUserByAccessToken(accessToken);
+        const userData = await userDO.getUserWithAccessToken(userId);
 
         if (userData) {
           user = userData.user as unknown as GitHubUser;
@@ -1519,7 +1573,6 @@ export function withSimplerAuth<TEnv = {}, TMetadata = { [key: string]: any }>(
       const url = new URL(request.url);
       const resourceMetadataUrl = `${url.origin}/.well-known/oauth-protected-resource`;
 
-      // Require login
       const loginUrl = `${
         url.origin
       }/authorize?redirect_to=${encodeURIComponent(request.url)}`;
@@ -1529,16 +1582,15 @@ export function withSimplerAuth<TEnv = {}, TMetadata = { [key: string]: any }>(
         {
           status: isBrowser ? 302 : 401,
           headers: {
+            ...getCorsHeaders(),
             Location: loginUrl,
             "X-Login-URL": loginUrl,
-            // MCP Required: WWW-Authenticate header with resource metadata URL (RFC9728)
             "WWW-Authenticate": `Bearer realm="main", login_url="${loginUrl}", resource_metadata="${resourceMetadataUrl}"`,
           },
         }
       );
     }
 
-    // Create enhanced context with user and registered status
     const enhancedCtx: UserContext<TMetadata> = {
       passThroughOnException: () => ctx.passThroughOnException(),
       props: ctx.props,
@@ -1553,11 +1605,14 @@ export function withSimplerAuth<TEnv = {}, TMetadata = { [key: string]: any }>(
         : undefined,
     };
 
-    // Call the user's fetch handler
     const response = await handler(request, env, enhancedCtx);
 
-    // Merge any headers from middleware (like Set-Cookie) with the response
     const newHeaders = new Headers(response.headers);
+
+    const corsHeaders = getCorsHeaders();
+    Object.entries(corsHeaders).forEach(([key, value]) => {
+      newHeaders.set(key, value);
+    });
 
     return new Response(response.body, {
       status: response.status,
