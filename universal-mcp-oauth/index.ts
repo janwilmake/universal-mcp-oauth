@@ -1,5 +1,6 @@
 /// <reference types="@cloudflare/workers-types" />
 /// <reference lib="esnext" />
+//@ts-check
 import { DurableObject } from "cloudflare:workers";
 import {
   constructMCPAuthorizationUrl,
@@ -195,8 +196,12 @@ export interface MCPOAuthHandlers {
 export function createMCPOAuthHandler(
   config: MCPOAuthConfig,
   env: MCPOAuthEnv
-): MCPOAuthHandlers {
+): MCPOAuthHandlers | null {
   const { userId, baseUrl, clientInfo, pathPrefix = "/mcp" } = config;
+  if (!userId) {
+    // NB: required!
+    return null;
+  }
 
   const getMcpStub = () => {
     return env.MCPProviders.get(env.MCPProviders.idFromName(VERSION + userId));
