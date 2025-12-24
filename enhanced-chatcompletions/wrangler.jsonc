@@ -1,6 +1,6 @@
 {
   "$schema": "https://unpkg.com/wrangler@latest/config-schema.json",
-  "name": "idp-chat",
+  "name": "idp-chatcompletions",
   "main": "demo.ts",
   "compatibility_date": "2025-09-21",
   "durable_objects": {
@@ -11,6 +11,5 @@
       "tag": "v1",
       "new_sqlite_classes": ["OAuthProviders"]
     }
-  ],
-  "routes": [{ "custom_domain": true, "pattern": "demo.connectconnector.com" }]
+  ]
 }

@@ -932,6 +932,7 @@ async function handleLogin(
   ) => Promise<{ name: string; metadata?: Record<string, unknown> }>,
 ): Promise<Response> {
   const url = new URL(request.url);
+  const isLocalhost = url.hostname === "localhost";
   const resourceUrl = url.searchParams.get("url");
   const scope = url.searchParams.get("scope") || undefined;
 
@@ -993,7 +994,9 @@ async function handleLogin(
       status: 302,
       headers: {
         Location: authFlowData.authorizationUrl!,
-        "Set-Cookie": `oauth_auth_${hostname}=${authFlowCookie}; HttpOnly; Secure; SameSite=Lax; Max-Age=600; Path=/`,
+        "Set-Cookie": `oauth_auth_${hostname}=${authFlowCookie}; HttpOnly;${
+          isLocalhost ? "" : " Secure;"
+        } SameSite=Lax; Max-Age=600; Path=/`,
       },
     });
   } catch (error) {
@@ -1016,6 +1019,7 @@ async function handleCallback(
   ) => Promise<{ name: string; metadata?: Record<string, unknown> }>,
 ): Promise<Response> {
   const url = new URL(request.url);
+  const isLocalhost = url.hostname === "localhost";
   const code = url.searchParams.get("code");
   const stateParam = url.searchParams.get("state");
 
@@ -1099,7 +1103,9 @@ async function handleCallback(
     return new Response(createSuccessHTML(name, false), {
       headers: {
         "Content-Type": "text/html",
-        "Set-Cookie": `oauth_auth_${hostname}=; HttpOnly; Secure; SameSite=Lax; Max-Age=0; Path=/`,
+        "Set-Cookie": `oauth_auth_${hostname}=; HttpOnly;${
+          isLocalhost ? "" : " Secure;"
+        } SameSite=Lax; Max-Age=0; Path=/`,
       },
     });
   } catch (error) {
