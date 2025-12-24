@@ -1,8 +1,5 @@
 import { withSimplerAuth } from "simplerauth-client";
-import {
-  chatCompletionsProxy,
-  OAuthProviders,
-} from "../mcp-completions/mcp-completions";
+import { chatCompletionsProxy, OAuthProviders } from "./mcp-completions";
 
 export { OAuthProviders };
 
