@@ -2,8 +2,6 @@
 > Please note: This repo consists of many smaller modules that can be used independently
 >
 > Be advised: While some are stable and of high-quality, others are in active development and may still be buggy.
->
-> Truly experimental modules and community modules are not part of this repo but are kept track of in [this list](https://github.com/stars/janwilmake/lists/simpler-auth). Please [DM Me](https://x.com/janwilmake) if you have built a new Simpler Auth Module so I can add it!
 
 # What is this?
 
