@@ -5,7 +5,7 @@ import {
   createMCPOAuthHandler,
   MCPOAuthEnv,
   MCPProvider,
-} from "universal-mcp-oauth";
+} from "./universal-mcp-oauth";
 
 export { MCPProviders };
 
