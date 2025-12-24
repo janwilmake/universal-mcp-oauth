@@ -21,14 +21,6 @@ Example usecases include:
 - A URL-based context editor that allows any URL, but if URL hosts allow for login, instruct user to login
 - Any other client where you want to support thousands of integrations without any maintenance.
 
-# Table of Contents
-
-Universal MCP OAuth Flow Implementations
-
-- [HTML Client](html-client/) (Live at https://mcp.agent-friendly.com)
-- [Parallel Tool Calling with MCP](parallel-tool-calling/) (Live at https://mcp.p0web.com)
-- [Cloudflare Worker](cloudflare-worker/) - Same as parallel-tool-calling
-
 Discuss
 
 - https://x.com/janwilmake/status/1954128444758864160
