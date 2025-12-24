@@ -1,14 +1,13 @@
 {
-  "version": "0.0.10",
+  "version": "0.0.11",
   "name": "mcp-completions",
   "main": "mcp-completions.ts",
   "files": [
     "mcp-completions.ts",
+    "mcp-oauth.ts",
+    "universal-oauth.ts",
     "README.md"
   ],
-  "dependencies": {
-    "universal-mcp-oauth": "0.0.14"
-  },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20251224.0"
   }

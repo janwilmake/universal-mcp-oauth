@@ -1,15 +1,15 @@
 import {
-  getAuthorization,
-  getMCPProviders,
-  MCPProviders,
   createMCPOAuthHandler,
   MCPOAuthEnv,
   MCPProvider,
-} from "./universal-mcp-oauth";
+  MCPTool,
+  OAuthProviders,
+} from "./mcp-oauth";
+import { getAuthorizationForUrl, UniversalOAuthEnv } from "./universal-oauth";
 
-export { MCPProviders };
+export { OAuthProviders };
 
-interface MCPTool {
+interface MCPToolSpec {
   type: "mcp";
   server_url: string;
   allowed_tools?: { tool_names: string[] };
@@ -43,9 +43,7 @@ export interface ChatCompletionRequest {
   presence_penalty?: number;
   stop?: string | string[];
   stream?: boolean;
-  stream_options?: {
-    include_usage?: boolean;
-  };
+  stream_options?: { include_usage?: boolean };
   tools?: Array<
     | {
         type: "function";
@@ -55,7 +53,7 @@ export interface ChatCompletionRequest {
           parameters?: Record<string, any>;
         };
       }
-    | MCPTool
+    | MCPToolSpec
     | URLContextTool
   >;
   tool_choice?:
@@ -69,12 +67,7 @@ export interface ChatCompletionRequest {
 interface MCPSession {
   sessionId?: string;
   initialized: boolean;
-  tools?: Array<{
-    name: string;
-    description?: string;
-    inputSchema?: any;
-    outputSchema?: any;
-  }>;
+  tools?: MCPTool[];
 }
 
 interface UsageStats {
@@ -179,7 +172,7 @@ async function initializeMCPSession(
   userId: string,
   env: any,
 ) {
-  const authHeaders = await getAuthorization(env, userId, serverUrl);
+  const authHeaders = await getAuthorizationForUrl(env, userId, serverUrl);
   const mcpHeaders: Record<string, string> = {
     "Content-Type": "application/json",
     Accept: "application/json,text/event-stream",
@@ -189,7 +182,6 @@ async function initializeMCPSession(
     }),
   };
 
-  // Initialize
   const initResponse = await fetch(serverUrl, {
     method: "POST",
     headers: mcpHeaders,
@@ -214,7 +206,6 @@ async function initializeMCPSession(
   const sessionId = initResponse.headers.get("Mcp-Session-Id");
   if (sessionId) mcpHeaders["Mcp-Session-Id"] = sessionId;
 
-  // Send initialized notification
   await fetch(serverUrl, {
     method: "POST",
     headers: mcpHeaders,
@@ -224,7 +215,6 @@ async function initializeMCPSession(
     }),
   });
 
-  // List tools
   const toolsResponse = await fetch(serverUrl, {
     method: "POST",
     headers: mcpHeaders,
@@ -249,7 +239,8 @@ async function fetchUrlContext(
   env: any,
 ): Promise<{ url: string; text: string; tokens: number; failed?: boolean }> {
   try {
-    const authHeaders = await getAuthorization(env, userId, url);
+    // Use universal OAuth to get authorization for ANY URL
+    const authHeaders = await getAuthorizationForUrl(env, userId, url);
     const headers: Record<string, string> = {
       Accept: "text/markdown,text/plain,*/*",
       ...(authHeaders?.Authorization && {
@@ -295,7 +286,6 @@ async function generateUrlContext(
   maxUrls: number = 10,
   maxContextLength: number = 1024 * 1024,
 ): Promise<string | undefined> {
-  // Extract URLs from all user messages
   const urlRegex =
     /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/g;
   const allUrls = new Set<string>();
@@ -307,11 +297,8 @@ async function generateUrlContext(
     }
   }
 
-  if (allUrls.size === 0) {
-    return undefined;
-  }
+  if (allUrls.size === 0) return undefined;
 
-  // Limit number of URLs
   const urlsToFetch = Array.from(allUrls).slice(0, maxUrls);
 
   let hasHtml = false;
@@ -321,13 +308,11 @@ async function generateUrlContext(
     urlsToFetch.map((url) => fetchUrlContext(url, userId, env)),
   );
 
-  // Check for HTML or errors
   for (const result of urlResults) {
     if (result.text.includes("HTML urls are not supported")) hasHtml = true;
     if (result.failed) hasError = true;
   }
 
-  // Construct context
   let context = urlResults.reduce((previous, { url, text, tokens }) => {
     const newContent = `${previous}\n${url} (${tokens} tokens) \n${
       previous.length > maxContextLength
@@ -354,11 +339,7 @@ export const chatCompletionsProxy = (
     baseUrl: string;
     userId: string | null;
     pathPrefix?: string;
-    clientInfo: {
-      name: string;
-      title: string;
-      version: string;
-    };
+    clientInfo: { name: string; title: string; version: string };
   },
 ): {
   fetchProxy: (
@@ -371,24 +352,14 @@ export const chatCompletionsProxy = (
     ctx: ExecutionContext,
   ) => Promise<Response | null>;
   removeMcp: (url: string) => Promise<void>;
-  getProviders: () => Promise<
-    (MCPProvider & {
-      tools:
-        | {
-            name: string;
-            inputSchema: any;
-            description: string;
-          }[]
-        | null;
-      reauthorizeUrl: string;
-    })[]
-  >;
+  getProviders: () => Promise<(MCPProvider & { reauthorizeUrl: string })[]>;
 } => {
   const { userId, baseUrl, clientInfo, pathPrefix = "/mcp" } = config;
 
-  // Create MCP OAuth handler
-  const { middleware, getProviders, refreshProviders, removeMcp } =
-    createMCPOAuthHandler({ userId, clientInfo, baseUrl, pathPrefix }, env);
+  const mcpHandler = createMCPOAuthHandler(
+    { userId, clientInfo, baseUrl, pathPrefix },
+    env,
+  );
 
   const idpMiddleware = async (
     request: Request,
@@ -398,7 +369,9 @@ export const chatCompletionsProxy = (
     const url = new URL(request.url);
 
     if (url.pathname.startsWith(pathPrefix + "/")) {
-      return await middleware(request, env as MCPOAuthEnv, ctx);
+      return (
+        (await mcpHandler?.middleware(request, env as MCPOAuthEnv, ctx)) || null
+      );
     }
 
     return null;
@@ -411,7 +384,6 @@ export const chatCompletionsProxy = (
     const llmEndpoint = typeof input === "string" ? input : input.toString();
     const headers = init?.headers ? new Headers(init.headers) : new Headers();
 
-    // Properly handle the request body
     let body: ChatCompletionRequest;
     try {
       if (init?.body) {
@@ -477,7 +449,9 @@ export const chatCompletionsProxy = (
     if (body.tools) {
       const mcpTools = body.tools.filter((x) => x.type === "mcp");
       const invalidMcpTools = mcpTools.filter(
-        (x) => (x.require_approval || "never") !== "never" || !x.server_url,
+        (x) =>
+          ((x as MCPToolSpec).require_approval || "never") !== "never" ||
+          !(x as MCPToolSpec).server_url,
       );
       if (invalidMcpTools.length > 0) {
         return new Response(
@@ -513,19 +487,14 @@ export const chatCompletionsProxy = (
         );
 
         if (urlContext) {
-          // Prepend URL context as a system message
-          body.messages.unshift({
-            role: "system",
-            content: urlContext,
-          });
+          body.messages.unshift({ role: "system", content: urlContext });
         }
 
-        // Remove url_context from tools as it's not a real tool for the LLM
         body.tools = body.tools?.filter((x) => x.type !== "url_context");
       }
 
       if (body.tools?.length) {
-        const mcpProviders = await getMCPProviders(env, userId);
+        const mcpProviders = (await mcpHandler?.getProviders()) || [];
         const transformedTools: Array<any> = [];
         const toolMap = new Map<
           string,
@@ -538,26 +507,29 @@ export const chatCompletionsProxy = (
             transformedTools.push(tool);
           } else if (tool.type === "mcp") {
             const provider = mcpProviders.find(
-              (x) => x.mcp_url === tool.server_url,
+              (x) => x.resource_url === (tool as MCPToolSpec).server_url,
             );
-            if (!provider?.access_token) {
-              missingAuth.push(tool.server_url);
+            if (!provider?.access_token && !provider?.public) {
+              missingAuth.push((tool as MCPToolSpec).server_url);
               continue;
             }
 
             for (const mcpTool of provider.tools || []) {
               if (
-                tool.allowed_tools?.tool_names &&
-                !tool.allowed_tools.tool_names.includes(mcpTool.name)
+                (tool as MCPToolSpec).allowed_tools?.tool_names &&
+                !(tool as MCPToolSpec).allowed_tools!.tool_names.includes(
+                  mcpTool.name,
+                )
               )
                 continue;
 
-              const functionName = `mcp_${provider.hostname.replaceAll(
-                ".",
-                "-",
-              )}_${mcpTool.name}`;
+              const hostname = new URL((tool as MCPToolSpec).server_url)
+                .hostname;
+              const functionName = `mcp_${hostname.replaceAll(".", "-")}_${
+                mcpTool.name
+              }`;
               toolMap.set(functionName, {
-                serverUrl: tool.server_url,
+                serverUrl: (tool as MCPToolSpec).server_url,
                 originalName: mcpTool.name,
               });
 
@@ -597,22 +569,12 @@ export const chatCompletionsProxy = (
           );
         }
 
-        // Refresh providers that we're about to use
+        // Refresh providers
         const authenticatedUrls = mcpProviders
           .filter((p) => p.access_token)
-          .map((p) => p.mcp_url);
-
+          .map((p) => p.resource_url);
         if (authenticatedUrls.length > 0) {
-          await refreshProviders(authenticatedUrls);
-          const refreshedProviders = await getMCPProviders(env, userId);
-          for (const refreshed of refreshedProviders) {
-            const index = mcpProviders.findIndex(
-              (p) => p.mcp_url === refreshed.mcp_url,
-            );
-            if (index >= 0) {
-              mcpProviders[index] = refreshed;
-            }
-          }
+          await mcpHandler?.refreshProviders(authenticatedUrls);
         }
 
         body.tools = transformedTools;
@@ -632,7 +594,6 @@ export const chatCompletionsProxy = (
               total_tokens: 0,
             };
 
-            // Send initial role chunk
             controller.enqueue(
               encoder.encode(
                 `data: ${JSON.stringify({
@@ -708,15 +669,11 @@ export const chatCompletionsProxy = (
 
                     try {
                       const data = JSON.parse(line.slice(6));
-
                       const choice = data.choices[0];
 
                       if (data.usage) {
                         stepUsage = data.usage;
-
-                        if (choice?.finish_reason !== "tool_calls") {
-                          continue;
-                        }
+                        if (choice?.finish_reason !== "tool_calls") continue;
                       }
 
                       if (
@@ -789,12 +746,10 @@ export const chatCompletionsProxy = (
                         break;
                       }
 
-                      if (choice?.finish_reason === "stop") {
-                        finished = true;
-                        break;
-                      }
-
-                      if (choice?.finish_reason === "length") {
+                      if (
+                        choice?.finish_reason === "stop" ||
+                        choice?.finish_reason === "length"
+                      ) {
                         finished = true;
                         break;
                       }
@@ -836,17 +791,8 @@ export const chatCompletionsProxy = (
               }
 
               if (finished) break;
-
-              if (!toolCalls.length) {
-                console.warn(
-                  "not finished, yet no tool calls. breaking, but this shouldn't happen",
-                );
-                break;
-              }
-
-              if (remainingTokens !== undefined && remainingTokens <= 0) {
-                break;
-              }
+              if (!toolCalls.length) break;
+              if (remainingTokens !== undefined && remainingTokens <= 0) break;
 
               // Execute tool calls
               for (const toolCall of toolCalls) {
@@ -857,7 +803,6 @@ export const chatCompletionsProxy = (
                   const toolInfo = mcpToolMap.get(toolCall.name)!;
                   const hostname = new URL(toolInfo.serverUrl).hostname;
 
-                  // Stream tool input
                   const toolInput = `\n\n<details><summary>🔧 ${
                     toolInfo.originalName
                   } (${hostname})</summary>\n\n\`\`\`json\n${JSON.stringify(
@@ -890,7 +835,7 @@ export const chatCompletionsProxy = (
                     if (!session?.initialized) {
                       const sessionData = await initializeMCPSession(
                         toolInfo.serverUrl,
-                        userId,
+                        userId!,
                         env,
                       );
                       session = {
@@ -901,9 +846,9 @@ export const chatCompletionsProxy = (
                       mcpSessions.set(sessionKey, session);
                     }
 
-                    const authHeaders = await getAuthorization(
+                    const authHeaders = await getAuthorizationForUrl(
                       env,
-                      userId,
+                      userId!,
                       toolInfo.serverUrl,
                     );
                     const executeHeaders: Record<string, string> = {
@@ -961,7 +906,6 @@ export const chatCompletionsProxy = (
                       );
                     }
 
-                    // Format result
                     const content = toolResult.result?.content;
                     let formattedResult: string;
 
@@ -1016,7 +960,6 @@ export const chatCompletionsProxy = (
                       content: formattedResult,
                     });
 
-                    // Stream result
                     const toolFeedback = `\n\n${formattedResult}\n\n`;
                     controller.enqueue(
                       encoder.encode(
@@ -1035,7 +978,7 @@ export const chatCompletionsProxy = (
                         })}\n\n`,
                       ),
                     );
-                  } catch (error) {
+                  } catch (error: any) {
                     const errorMsg = `**Error**: ${error.message}`;
                     currentMessages.push({
                       role: "tool",
@@ -1065,7 +1008,6 @@ export const chatCompletionsProxy = (
               }
             }
 
-            // Send final chunk
             const finalChunk: any = {
               id: requestId,
               object: "chat.completion.chunk",
@@ -1081,7 +1023,6 @@ export const chatCompletionsProxy = (
             controller.enqueue(
               encoder.encode(`data: ${JSON.stringify(finalChunk)}\n\n`),
             );
-
             controller.enqueue(encoder.encode("data: [DONE]\n\n"));
             controller.close();
           } catch (error) {
@@ -1109,5 +1050,10 @@ export const chatCompletionsProxy = (
     }
   };
 
-  return { fetchProxy, idpMiddleware, getProviders, removeMcp };
+  return {
+    fetchProxy,
+    idpMiddleware,
+    getProviders: mcpHandler?.getProviders || (async () => []),
+    removeMcp: mcpHandler?.removeMcp || (async () => {}),
+  };
 };

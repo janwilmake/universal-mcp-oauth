@@ -1,7 +1,10 @@
 import { withSimplerAuth } from "simplerauth-client";
-import { chatCompletionsProxy, MCPProviders } from "../mcp-completions";
+import {
+  chatCompletionsProxy,
+  OAuthProviders,
+} from "../mcp-completions/mcp-completions";
 
-export { MCPProviders };
+export { OAuthProviders };
 
 const HTML_TEMPLATE = `
 <!DOCTYPE html>
@@ -930,7 +933,7 @@ export default {
       const { idpMiddleware, fetchProxy, getProviders, removeMcp } =
         chatCompletionsProxy(env, {
           baseUrl: new URL(request.url).origin,
-          userId: ctx.user.id,
+          userId: ctx.user!.id,
           clientInfo: {
             name: "MCP Chat Proxy",
             title: "MCP Chat Completions Proxy",
@@ -977,7 +980,7 @@ export default {
           return new HTMLRewriter()
             .on(
               'script[id="providers-data"]',
-              new DataInjector(providers, userData)
+              new DataInjector(providers, userData),
             )
             .on('script[id="user-data"]', new DataInjector(providers, userData))
             .transform(response);
@@ -1001,7 +1004,7 @@ export default {
       if (pathSegments.length < 2) {
         return new Response(
           "Path should be /{hostnameAndPrefix}/chat/completions",
-          { status: 400 }
+          { status: 400 },
         );
       }
 
@@ -1036,6 +1039,7 @@ export default {
         body: request.body,
       });
     },
-    { isLoginRequired: true }
+    // require it so its always available
+    { isLoginRequired: true },
   ),
 };
