@@ -23,23 +23,11 @@ Example usecases include:
 
 # Table of Contents
 
-OAuth Provider Proxies
-
-- [x-oauth-provider](x-oauth-provider/) - X OAuth Provider Proxy
-- [github-oauth-provider](github-oauth-provider/) - GitHub OAuth Provider Proxy
-- [simplerauth-client](simplerauth-client/) - Universal OAuth Provider Proxy
-- [parallel-oauth-provider](parallel-oauth-provider/) - GitHub-Provider Proxy that attaches Parallel API Key (Coming soon)
-
 Universal MCP OAuth Flow Implementations
 
 - [HTML Client](html-client/) (Live at https://mcp.agent-friendly.com)
 - [Parallel Tool Calling with MCP](parallel-tool-calling/) (Live at https://mcp.p0web.com)
 - [Cloudflare Worker](cloudflare-worker/) - Same as parallel-tool-calling
-
-Packages
-
-- [mcp-client-server-registration](mcp-client-server-registration/) - context and web-standard implementation for MCP discovery and oauth flow
-- [universal-mcp-oauth](universal-mcp-oauth/) - Lightweight Cloudflare-based MCP token management
 
 Discuss
 
