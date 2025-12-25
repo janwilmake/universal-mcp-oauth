@@ -1,13 +1,16 @@
-Check [readme](https://github.com/janwilmake/universal-mcp-oauth/tree/main/enhanced-chatcompletions).
+Check [readme](https://github.com/janwilmake/universal-mcp-oauth/tree/main/mcp-completions).
 
-- Intended usage: package or hosted? likely package because of additional cost.
+- Intended usage: **package**
 - Add shadow url object replacer such that github.com works
 - Add extract url such that any other html/pdf response works with that as fallback
 - ensure additional cost for extract and other apis gets properly added to chat completions usage cost
 
-After this; how can I add statefulness?
+After this; how can I add statefulness and other cool features?
 
 - cache?
+- frontmatter
+- responses
 - x login + stripe credit? pricing
+- cronjobs
 
-Determine how I add `mcp-completions` into `contextarea`...
+Where does the CLI hook into the boundary of what i'm creating? Determine how I add `mcp-completions` into `contextarea` as well as the new `nlang.dev` cli

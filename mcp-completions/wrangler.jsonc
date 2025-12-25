@@ -1,7 +1,7 @@
 {
   "$schema": "https://unpkg.com/wrangler@latest/config-schema.json",
   "name": "idp-chatcompletions",
-  "main": "demo.ts",
+  "main": "demo-openai.ts",
   "compatibility_date": "2025-09-21",
   "durable_objects": {
     "bindings": [{ "name": "OAuthProviders", "class_name": "OAuthProviders" }]
