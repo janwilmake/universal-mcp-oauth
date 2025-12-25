@@ -138,3 +138,8 @@ The problem seems to be that there's a max length of 500 characters to the state
 ✅ TEST WITH `mcp-client-server-registration` html-client:❗️ Now, I'm getting: `{"error":"invalid_token","error_description":"Token not found or expired"}` for `/authorize` if done from https://mcp.p0web.com. Am I calling the endpoint correctly? Go over the code here. Let's look in the database if things are done correctly and if every error is logged. 🎉🎉🎉🎉🎉🎉fixed fixed fixed omg omg omg🎉🎉🎉🎉🎉
 
 ✅ also works for markdownfeed.com and any other one using login.wilmake.com
+
+# Refactor
+
+- ✅ simplify mcp completions by not having it use the packages but just have the files in there.
+- ✅ create list of requirements for `chatcompletions++` library
