@@ -5,7 +5,11 @@ import {
   MCPTool,
   OAuthProviders,
 } from "./mcp-oauth";
-import { getAuthorizationForUrl, UniversalOAuthEnv } from "./universal-oauth";
+import {
+  getAuthorizationForUrl,
+  parseWWWAuthenticate,
+  UniversalOAuthEnv,
+} from "./universal-oauth";
 
 export { OAuthProviders };
 
@@ -74,23 +78,52 @@ interface UsageStats {
   prompt_tokens: number;
   completion_tokens: number;
   total_tokens: number;
-  /** Additional cost in cents from extract APIs and other services */
   additional_cost_cents?: number;
 }
 
 export interface ShadowUrlConfig {
-  /** Map of old hostname to new hostname for URL replacement */
   [oldHostname: string]: string;
 }
 
 export interface ExtractUrlConfig {
-  /** Base URL for the extract service (e.g., "https://extract.example.com") */
   url: string;
-  /** Bearer token for authentication */
   bearerToken: string;
 }
 
+export interface AuthRequiredError {
+  type: "auth_required";
+  message: string;
+  providers: Array<{
+    url: string;
+    hostname: string;
+    login_url: string;
+    provider_type: "mcp" | "url_context";
+  }>;
+}
+
 const mcpSessions = new Map<string, MCPSession>();
+
+function createAuthRequiredResponse(error: AuthRequiredError): Response {
+  return new Response(
+    JSON.stringify({
+      error: {
+        message: error.message,
+        type: "auth_required",
+        code: "authentication_required",
+        providers: error.providers,
+      },
+    }),
+    {
+      status: 401,
+      headers: {
+        "Content-Type": "application/json",
+        "WWW-Authenticate": `Bearer realm="mcp-completions", providers="${error.providers
+          .map((p) => p.hostname)
+          .join(",")}"`,
+      },
+    },
+  );
+}
 
 async function parseMCPResponse(response: Response): Promise<any> {
   const contentType = response.headers.get("content-type") || "";
@@ -142,43 +175,6 @@ async function parseMCPResponse(response: Response): Promise<any> {
       throw new Error(`Invalid JSON response: ${responseText}`);
     }
   }
-}
-
-function createErrorStream(content: string, requestId: string, model: string) {
-  const encoder = new TextEncoder();
-  return new ReadableStream({
-    async start(controller) {
-      const chunks = [
-        { delta: { role: "assistant" } },
-        { delta: { content } },
-        { delta: {}, finish_reason: "stop" },
-      ];
-
-      for (const [i, chunk] of chunks.entries()) {
-        controller.enqueue(
-          encoder.encode(
-            `data: ${JSON.stringify({
-              id: requestId,
-              object: "chat.completion.chunk",
-              created: Math.floor(Date.now() / 1000),
-              model,
-              choices: [
-                {
-                  index: 0,
-                  ...chunk,
-                  finish_reason: chunk.finish_reason || null,
-                },
-              ],
-            })}\n\n`,
-          ),
-        );
-        if (i < chunks.length - 1) await new Promise((r) => setTimeout(r, 10));
-      }
-
-      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-      controller.close();
-    },
-  });
 }
 
 async function initializeMCPSession(
@@ -246,9 +242,6 @@ async function initializeMCPSession(
   return { sessionId, tools: toolsResult.result?.tools || [] };
 }
 
-/**
- * Apply shadow URL replacement based on hostname mapping
- */
 function applyShadowUrl(url: string, shadowUrls?: ShadowUrlConfig): string {
   if (!shadowUrls) return url;
 
@@ -265,7 +258,70 @@ function applyShadowUrl(url: string, shadowUrls?: ShadowUrlConfig): string {
   return url;
 }
 
-// URL Context fetching with authentication
+function extractUrlsFromMessages(
+  messages: Array<{ role: string; content?: string | null }>,
+): string[] {
+  const urlRegex =
+    /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/g;
+  const allUrls = new Set<string>();
+
+  for (const message of messages) {
+    if (message.role === "user" && message.content) {
+      const urls = message.content.match(urlRegex) || [];
+      urls.forEach((url) => allUrls.add(url));
+    }
+  }
+
+  return Array.from(allUrls);
+}
+
+/**
+ * Check if a URL requires authentication by making a HEAD request
+ * and checking for 401 with WWW-Authenticate header
+ */
+async function checkUrlAuthRequired(
+  url: string,
+  userId: string,
+  env: any,
+): Promise<{
+  requiresAuth: boolean;
+  hasAuth: boolean;
+  resourceMetadataUrl?: string;
+}> {
+  // First check if we already have auth for this URL
+  const existingAuth = await getAuthorizationForUrl(env, userId, url);
+  if (existingAuth?.Authorization) {
+    return { requiresAuth: false, hasAuth: true };
+  }
+
+  // Make a HEAD request to check if auth is required
+  try {
+    const response = await fetch(url, {
+      method: "HEAD",
+      headers: { Accept: "*/*" },
+    });
+
+    if (response.status === 401) {
+      const wwwAuth = response.headers.get("WWW-Authenticate");
+      if (wwwAuth) {
+        const parsed = parseWWWAuthenticate(wwwAuth);
+        return {
+          requiresAuth: true,
+          hasAuth: false,
+          resourceMetadataUrl: parsed.resourceMetadataUrl,
+        };
+      }
+      return { requiresAuth: true, hasAuth: false };
+    }
+
+    // 200 or other non-401 status means no auth required
+    return { requiresAuth: false, hasAuth: false };
+  } catch (error) {
+    // Network error - assume no auth required, will fail later with proper error
+    return { requiresAuth: false, hasAuth: false };
+  }
+}
+
 async function fetchUrlContext(
   url: string,
   userId: string,
@@ -279,12 +335,9 @@ async function fetchUrlContext(
   failed?: boolean;
   costCents?: number;
 }> {
-  // Apply shadow URL replacement
   const effectiveUrl = applyShadowUrl(url, shadowUrls);
-  const wasReplaced = effectiveUrl !== url;
 
   try {
-    // Use universal OAuth to get authorization for ANY URL
     const authHeaders = await getAuthorizationForUrl(env, userId, effectiveUrl);
     const headers: Record<string, string> = {
       Accept: "text/markdown,text/plain,*/*",
@@ -300,7 +353,6 @@ async function fetchUrlContext(
       contentType.startsWith("text/markdown") ||
       contentType.startsWith("application/json");
 
-    // If we got HTML/PDF and have extract config, use the extract service
     if (!isTextContent && extractConfig) {
       const extractUrl = `${extractConfig.url}/${encodeURIComponent(
         effectiveUrl,
@@ -352,7 +404,6 @@ async function fetchUrlContext(
     const text = await response.text();
     const mime = contentType?.split(";")[0].split("/")[1] || "text";
     const tokens = Math.round(text.length / 5);
-    const urlNote = wasReplaced ? ` (fetched from ${effectiveUrl})` : "";
     return {
       url,
       text: `\`\`\`${mime}\n${text}\n\n\`\`\`\n`,
@@ -377,20 +428,11 @@ async function generateUrlContext(
   shadowUrls?: ShadowUrlConfig,
   extractConfig?: ExtractUrlConfig,
 ): Promise<{ context: string | undefined; costCents: number }> {
-  const urlRegex =
-    /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/g;
-  const allUrls = new Set<string>();
+  const urls = extractUrlsFromMessages(messages);
 
-  for (const message of messages) {
-    if (message.role === "user" && message.content) {
-      const urls = message.content.match(urlRegex) || [];
-      urls.forEach((url) => allUrls.add(url));
-    }
-  }
+  if (urls.length === 0) return { context: undefined, costCents: 0 };
 
-  if (allUrls.size === 0) return { context: undefined, costCents: 0 };
-
-  const urlsToFetch = Array.from(allUrls).slice(0, maxUrls);
+  const urlsToFetch = urls.slice(0, maxUrls);
 
   let hasHtml = false;
   let hasError = false;
@@ -439,9 +481,7 @@ export const chatCompletionsProxy = (
     userId: string | null;
     pathPrefix?: string;
     clientInfo: { name: string; title: string; version: string };
-    /** Shadow URL mapping: {oldHostname: newHostname} */
     shadowUrls?: ShadowUrlConfig;
-    /** Extract URL config for HTML/PDF fallback */
     extractUrl?: ExtractUrlConfig;
   },
 ): {
@@ -581,11 +621,83 @@ export const chatCompletionsProxy = (
         | Map<string, { serverUrl: string; originalName: string }>
         | undefined;
 
-      // Track additional costs from extract API
       let additionalCostCents = 0;
+      const allMissingAuth: AuthRequiredError["providers"] = [];
 
-      // Handle URL Context Tool
+      // Check URL context auth requirements
       const urlContextTool = body.tools?.find((x) => x.type === "url_context");
+      if (urlContextTool && userId) {
+        const urls = extractUrlsFromMessages(body.messages);
+        const maxUrls = (urlContextTool as URLContextTool).max_urls || 10;
+        const urlsToCheck = urls.slice(0, maxUrls);
+
+        // Check each URL for auth requirements (in parallel)
+        const authChecks = await Promise.all(
+          urlsToCheck.map(async (url) => {
+            const effectiveUrl = applyShadowUrl(url, shadowUrls);
+            const authStatus = await checkUrlAuthRequired(
+              effectiveUrl,
+              userId,
+              env,
+            );
+            return { url, effectiveUrl, ...authStatus };
+          }),
+        );
+
+        // Collect URLs that require auth but don't have it
+        for (const check of authChecks) {
+          if (check.requiresAuth && !check.hasAuth) {
+            const hostname = new URL(check.effectiveUrl).hostname;
+            allMissingAuth.push({
+              url: check.effectiveUrl,
+              hostname,
+              login_url: `${baseUrl}${pathPrefix}/login?url=${encodeURIComponent(
+                check.effectiveUrl,
+              )}`,
+              provider_type: "url_context",
+            });
+          }
+        }
+      }
+
+      // Check MCP auth requirements
+      if (body.tools?.length) {
+        const mcpProviders = (await mcpHandler?.getProviders()) || [];
+
+        for (const tool of body.tools) {
+          if (tool.type === "mcp") {
+            const provider = mcpProviders.find(
+              (x) => x.resource_url === (tool as MCPToolSpec).server_url,
+            );
+            if (!provider?.access_token && !provider?.public) {
+              const serverUrl = (tool as MCPToolSpec).server_url;
+              const hostname = new URL(serverUrl).hostname;
+              allMissingAuth.push({
+                url: serverUrl,
+                hostname,
+                login_url: `${baseUrl}${pathPrefix}/login?url=${encodeURIComponent(
+                  serverUrl,
+                )}`,
+                provider_type: "mcp",
+              });
+            }
+          }
+        }
+      }
+
+      // Return 401 if any auth is missing
+      if (allMissingAuth.length > 0) {
+        const authError: AuthRequiredError = {
+          type: "auth_required",
+          message: `Authentication required. Please authenticate with the following providers: ${allMissingAuth
+            .map((p) => `${p.hostname} (${p.provider_type})`)
+            .join(", ")}`,
+          providers: allMissingAuth,
+        };
+        return createAuthRequiredResponse(authError);
+      }
+
+      // Process URL context
       if (urlContextTool && userId) {
         const maxUrls = (urlContextTool as URLContextTool).max_urls || 10;
         const maxContextLength =
@@ -610,6 +722,7 @@ export const chatCompletionsProxy = (
         body.tools = body.tools?.filter((x) => x.type !== "url_context");
       }
 
+      // Process MCP tools
       if (body.tools?.length) {
         const mcpProviders = (await mcpHandler?.getProviders()) || [];
         const transformedTools: Array<any> = [];
@@ -617,7 +730,6 @@ export const chatCompletionsProxy = (
           string,
           { serverUrl: string; originalName: string }
         >();
-        const missingAuth: string[] = [];
 
         for (const tool of body.tools) {
           if (tool.type === "function") {
@@ -626,10 +738,7 @@ export const chatCompletionsProxy = (
             const provider = mcpProviders.find(
               (x) => x.resource_url === (tool as MCPToolSpec).server_url,
             );
-            if (!provider?.access_token && !provider?.public) {
-              missingAuth.push((tool as MCPToolSpec).server_url);
-              continue;
-            }
+            if (!provider) continue;
 
             for (const mcpTool of provider.tools || []) {
               if (
@@ -664,29 +773,6 @@ export const chatCompletionsProxy = (
           }
         }
 
-        if (missingAuth.length) {
-          const loginLinks = missingAuth
-            .map(
-              (x) =>
-                `- [Authorize ${
-                  new URL(x).hostname
-                }](${baseUrl}/mcp/login?url=${encodeURIComponent(x)})`,
-            )
-            .join("\n");
-          const content = `# MCP Server Authentication Required\n\nTo use the requested MCP tools, you need to authenticate with the following servers:\n\n${loginLinks}\n\nAfter authentication, retry your request.`;
-          return new Response(
-            createErrorStream(content, requestId, body.model),
-            {
-              headers: {
-                "Content-Type": "text/event-stream",
-                "Cache-Control": "no-cache",
-                Connection: "keep-alive",
-              },
-            },
-          );
-        }
-
-        // Refresh providers
         const authenticatedUrls = mcpProviders
           .filter((p) => p.access_token)
           .map((p) => p.resource_url);
@@ -912,7 +998,6 @@ export const chatCompletionsProxy = (
               if (!toolCalls.length) break;
               if (remainingTokens !== undefined && remainingTokens <= 0) break;
 
-              // Execute tool calls
               for (const toolCall of toolCalls) {
                 if (
                   mcpToolMap?.has(toolCall.name) &&
@@ -1005,9 +1090,7 @@ export const chatCompletionsProxy = (
                     if (!toolResponse.ok) {
                       if (toolResponse.status === 401) {
                         throw new Error(
-                          `# MCP Server Authentication Required\n\nAuthentication failed for ${hostname}. Please re-authenticate:\n\n- [Authorize ${hostname}](${baseUrl}/mcp/login?url=${encodeURIComponent(
-                            toolInfo.serverUrl,
-                          )})\n\nAfter authentication, retry your request.`,
+                          `Authentication expired for ${hostname}. Please re-authenticate.`,
                         );
                       } else {
                         const errorText = await toolResponse.text();
