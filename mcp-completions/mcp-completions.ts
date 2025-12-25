@@ -74,6 +74,20 @@ interface UsageStats {
   prompt_tokens: number;
   completion_tokens: number;
   total_tokens: number;
+  /** Additional cost in cents from extract APIs and other services */
+  additional_cost_cents?: number;
+}
+
+export interface ShadowUrlConfig {
+  /** Map of old hostname to new hostname for URL replacement */
+  [oldHostname: string]: string;
+}
+
+export interface ExtractUrlConfig {
+  /** Base URL for the extract service (e.g., "https://extract.example.com") */
+  url: string;
+  /** Bearer token for authentication */
+  bearerToken: string;
 }
 
 const mcpSessions = new Map<string, MCPSession>();
@@ -232,15 +246,46 @@ async function initializeMCPSession(
   return { sessionId, tools: toolsResult.result?.tools || [] };
 }
 
+/**
+ * Apply shadow URL replacement based on hostname mapping
+ */
+function applyShadowUrl(url: string, shadowUrls?: ShadowUrlConfig): string {
+  if (!shadowUrls) return url;
+
+  try {
+    const urlObj = new URL(url);
+    const newHostname = shadowUrls[urlObj.hostname];
+    if (newHostname) {
+      urlObj.hostname = newHostname;
+      return urlObj.toString();
+    }
+  } catch {
+    // Invalid URL, return as-is
+  }
+  return url;
+}
+
 // URL Context fetching with authentication
 async function fetchUrlContext(
   url: string,
   userId: string,
   env: any,
-): Promise<{ url: string; text: string; tokens: number; failed?: boolean }> {
+  shadowUrls?: ShadowUrlConfig,
+  extractConfig?: ExtractUrlConfig,
+): Promise<{
+  url: string;
+  text: string;
+  tokens: number;
+  failed?: boolean;
+  costCents?: number;
+}> {
+  // Apply shadow URL replacement
+  const effectiveUrl = applyShadowUrl(url, shadowUrls);
+  const wasReplaced = effectiveUrl !== url;
+
   try {
     // Use universal OAuth to get authorization for ANY URL
-    const authHeaders = await getAuthorizationForUrl(env, userId, url);
+    const authHeaders = await getAuthorizationForUrl(env, userId, effectiveUrl);
     const headers: Record<string, string> = {
       Accept: "text/markdown,text/plain,*/*",
       ...(authHeaders?.Authorization && {
@@ -248,27 +293,71 @@ async function fetchUrlContext(
       }),
     };
 
-    const response = await fetch(url, { headers });
-    const contentType = response.headers.get("content-type");
-    const isHtml = contentType?.startsWith("text/html");
+    const response = await fetch(effectiveUrl, { headers });
+    const contentType = response.headers.get("content-type") || "";
+    const isTextContent =
+      contentType.startsWith("text/plain") ||
+      contentType.startsWith("text/markdown") ||
+      contentType.startsWith("application/json");
 
-    if (isHtml) {
+    // If we got HTML/PDF and have extract config, use the extract service
+    if (!isTextContent && extractConfig) {
+      const extractUrl = `${extractConfig.url}/${encodeURIComponent(
+        effectiveUrl,
+      )}`;
+      const extractResponse = await fetch(extractUrl, {
+        headers: {
+          Authorization: `Bearer ${extractConfig.bearerToken}`,
+          Accept: "text/markdown,text/plain",
+        },
+      });
+
+      if (extractResponse.ok) {
+        const extractedText = await extractResponse.text();
+        const priceHeader = extractResponse.headers.get("x-price");
+        const costCents = priceHeader ? parseFloat(priceHeader) : 0;
+        const tokens = Math.round(extractedText.length / 5);
+        const extractContentType =
+          extractResponse.headers.get("content-type")?.split(";")[0] ||
+          "markdown";
+        const mime = extractContentType.split("/")[1] || "markdown";
+
+        return {
+          url,
+          text: `\`\`\`${mime}\n${extractedText}\n\n\`\`\`\n`,
+          tokens,
+          costCents,
+        };
+      }
+    }
+
+    const isHtml = contentType?.startsWith("text/html");
+    const isPdf = contentType?.startsWith("application/pdf");
+
+    if (isHtml || isPdf) {
       const appendix = url.startsWith("https://github.com/")
         ? "For github code, use https://uithub.com/owner/repo"
         : url.startsWith("https://x.com")
         ? "For x threads, use xymake.com/status/..."
+        : extractConfig
+        ? "Extract service failed to process this URL"
         : "For blogs/docs, use firecrawl or https://jina.ai/reader";
       return {
         url,
-        text: "HTML urls are not supported. " + appendix,
+        text: `${isHtml ? "HTML" : "PDF"} urls are not supported. ${appendix}`,
         tokens: 0,
       };
     }
 
     const text = await response.text();
-    const mime = contentType?.split(";")[0].split("/")[1];
+    const mime = contentType?.split(";")[0].split("/")[1] || "text";
     const tokens = Math.round(text.length / 5);
-    return { url, text: `\`\`\`${mime}\n${text}\n\n\`\`\`\n`, tokens };
+    const urlNote = wasReplaced ? ` (fetched from ${effectiveUrl})` : "";
+    return {
+      url,
+      text: `\`\`\`${mime}\n${text}\n\n\`\`\`\n`,
+      tokens,
+    };
   } catch (error: any) {
     return {
       url,
@@ -285,7 +374,9 @@ async function generateUrlContext(
   env: any,
   maxUrls: number = 10,
   maxContextLength: number = 1024 * 1024,
-): Promise<string | undefined> {
+  shadowUrls?: ShadowUrlConfig,
+  extractConfig?: ExtractUrlConfig,
+): Promise<{ context: string | undefined; costCents: number }> {
   const urlRegex =
     /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/g;
   const allUrls = new Set<string>();
@@ -297,20 +388,28 @@ async function generateUrlContext(
     }
   }
 
-  if (allUrls.size === 0) return undefined;
+  if (allUrls.size === 0) return { context: undefined, costCents: 0 };
 
   const urlsToFetch = Array.from(allUrls).slice(0, maxUrls);
 
   let hasHtml = false;
   let hasError = false;
+  let totalCostCents = 0;
 
   const urlResults = await Promise.all(
-    urlsToFetch.map((url) => fetchUrlContext(url, userId, env)),
+    urlsToFetch.map((url) =>
+      fetchUrlContext(url, userId, env, shadowUrls, extractConfig),
+    ),
   );
 
   for (const result of urlResults) {
-    if (result.text.includes("HTML urls are not supported")) hasHtml = true;
+    if (
+      result.text.includes("HTML urls are not supported") ||
+      result.text.includes("PDF urls are not supported")
+    )
+      hasHtml = true;
     if (result.failed) hasError = true;
+    if (result.costCents) totalCostCents += result.costCents;
   }
 
   let context = urlResults.reduce((previous, { url, text, tokens }) => {
@@ -326,11 +425,11 @@ async function generateUrlContext(
     context =
       context +
       `\n\nThere were one or more URLs pasted that returned ${
-        hasHtml ? "HTML" : "an error"
+        hasHtml ? "HTML/PDF" : "an error"
       }. If these URLs are needed to answer the user request, please instruct the user to use the suggested alternatives.`;
   }
 
-  return context;
+  return { context, costCents: totalCostCents };
 }
 
 export const chatCompletionsProxy = (
@@ -340,6 +439,10 @@ export const chatCompletionsProxy = (
     userId: string | null;
     pathPrefix?: string;
     clientInfo: { name: string; title: string; version: string };
+    /** Shadow URL mapping: {oldHostname: newHostname} */
+    shadowUrls?: ShadowUrlConfig;
+    /** Extract URL config for HTML/PDF fallback */
+    extractUrl?: ExtractUrlConfig;
   },
 ): {
   fetchProxy: (
@@ -354,7 +457,14 @@ export const chatCompletionsProxy = (
   removeMcp: (url: string) => Promise<void>;
   getProviders: () => Promise<(MCPProvider & { reauthorizeUrl: string })[]>;
 } => {
-  const { userId, baseUrl, clientInfo, pathPrefix = "/mcp" } = config;
+  const {
+    userId,
+    baseUrl,
+    clientInfo,
+    pathPrefix = "/mcp",
+    shadowUrls,
+    extractUrl,
+  } = config;
 
   const mcpHandler = createMCPOAuthHandler(
     { userId, clientInfo, baseUrl, pathPrefix },
@@ -471,6 +581,9 @@ export const chatCompletionsProxy = (
         | Map<string, { serverUrl: string; originalName: string }>
         | undefined;
 
+      // Track additional costs from extract API
+      let additionalCostCents = 0;
+
       // Handle URL Context Tool
       const urlContextTool = body.tools?.find((x) => x.type === "url_context");
       if (urlContextTool && userId) {
@@ -478,13 +591,17 @@ export const chatCompletionsProxy = (
         const maxContextLength =
           (urlContextTool as URLContextTool).max_context_length || 1024 * 1024;
 
-        const urlContext = await generateUrlContext(
+        const { context: urlContext, costCents } = await generateUrlContext(
           body.messages,
           userId,
           env,
           maxUrls,
           maxContextLength,
+          shadowUrls,
+          extractUrl,
         );
+
+        additionalCostCents += costCents;
 
         if (urlContext) {
           body.messages.unshift({ role: "system", content: urlContext });
@@ -592,6 +709,7 @@ export const chatCompletionsProxy = (
               prompt_tokens: 0,
               completion_tokens: 0,
               total_tokens: 0,
+              additional_cost_cents: additionalCostCents,
             };
 
             controller.enqueue(

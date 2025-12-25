@@ -264,7 +264,11 @@ const HTML_TEMPLATE = `
                                 }
                             }
                             if (data.usage) {
-                                fullContent += '\\n\\n---\\nUsage: ' + JSON.stringify(data.usage);
+                                let usageStr = '\\n\\n---\\nUsage: ' + JSON.stringify(data.usage);
+                                if (data.usage.additional_cost_cents) {
+                                    usageStr += '\\nAdditional cost: $' + (data.usage.additional_cost_cents / 100).toFixed(4);
+                                }
+                                fullContent += usageStr;
                                 responseDiv.textContent = fullContent;
                             }
                         } catch (e) {
@@ -316,6 +320,19 @@ export default {
             title: "MCP Completions Demo",
             version: "1.0.0",
           },
+          // Shadow URL config: replace hostnames for easier access
+          shadowUrls: {
+            "github.com": "uithub.com",
+            "x.com": "xymake.com",
+            "twitter.com": "xymake.com",
+          },
+          // Extract URL config for HTML/PDF fallback (optional)
+          extractUrl: env.EXTRACT_URL
+            ? {
+                url: env.EXTRACT_URL,
+                bearerToken: env.EXTRACT_BEARER_TOKEN || "",
+              }
+            : undefined,
         });
 
       // Handle MCP OAuth routes
